@@ -1,0 +1,14 @@
+
+> beeperlocal-desktop@0.8.3 build
+> tsc --noEmit && vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 23 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.35 kB │ gzip:  0.26 kB
+dist/assets/index-D7KnrwiQ.css   16.55 kB │ gzip:  4.68 kB
+dist/assets/index-CxOI0R1t.js   269.25 kB │ gzip: 83.23 kB
+
+✓ built in 127ms

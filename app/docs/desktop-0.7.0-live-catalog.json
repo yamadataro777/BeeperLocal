@@ -1,0 +1,12 @@
+{
+  "scope": "existing_session_read_only",
+  "login_started_by_probe": false,
+  "messages_sent": 0,
+  "count": 46,
+  "ordered_descending": true,
+  "timestamp_count": 46,
+  "named_count": 46,
+  "picture_count": 46,
+  "sample_images_requested": 3,
+  "sample_images_loaded": 3
+}

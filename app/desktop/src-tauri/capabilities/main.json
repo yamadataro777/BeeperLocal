@@ -1,0 +1,6 @@
+{
+  "identifier": "main",
+  "description": "Only the local main window can use the typed Core bridge.",
+  "windows": ["main"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

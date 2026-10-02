@@ -1,0 +1,14 @@
+{
+  "version": "0.7.0",
+  "installed_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal.app",
+  "backup_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/app-backups/BeeperLocal-0.6.0-before-0.7.0-20260930-184337.app",
+  "runtime_hashes_match": {
+    "beeperlocal-desktop": true,
+    "beeperlocal-core": true,
+    "line": true
+  },
+  "signature_verified": true,
+  "bundled_cli_version": "line v0.4.0-beeperlocal.1",
+  "license_bundled": true,
+  "final_update_backup_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/app-backups/BeeperLocal-0.7.0-before-catalog-final-20260930-185436.app"
+}

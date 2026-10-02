@@ -1,0 +1,18 @@
+[package]
+name = "beeperlocal-desktop"
+version = "0.8.3"
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
+
+[profile.release]
+strip = true
+lto = "thin"
+codegen-units = 1

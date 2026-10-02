@@ -1,0 +1,12 @@
+{
+  "version": "0.8.1",
+  "formal_signature": true,
+  "installed_app": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000\u691c\u8a3c/BeeperLocal.app",
+  "backup": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000\u691c\u8a3c/app-backups/BeeperLocal-0.8.0-before-0.8.1-20261001.app",
+  "binary_sha256": {
+    "beeperlocal-desktop": "d6441b3025329c07d2a5be7a5d448b5dbff72848ac1a0386131ecc71c10f4b09",
+    "beeperlocal-core": "4a3fc1d4134f1d17cd48c7bb1bcf76bea02ce6dbedcee1bdc90378bdf99ed460",
+    "line": "a576a692a03d89a7cc18153c7176b60585dc16cbc7a9412bad01649b381e6c33",
+    "beeperlocal-ig": "f96ac1d2623e375fcd0ce642a76cc1d9681b9d4a8ad4d8cac794263ed27e4ed5"
+  }
+}

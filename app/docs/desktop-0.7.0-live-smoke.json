@@ -1,0 +1,19 @@
+{
+  "login_started": false,
+  "messages_sent": 0,
+  "ping": {
+    "ready": true,
+    "version": "0.7.0"
+  },
+  "saved_conversation_count": 510,
+  "snapshot_error": null,
+  "login_stage": "idle",
+  "connect_ok": true,
+  "connect_error": null,
+  "current_conversation_count": 46,
+  "dated_conversation_count": 46,
+  "ordered_descending": true,
+  "profile_image_count": 46,
+  "image_sample_attempted": 3,
+  "image_sample_loaded": 3
+}

@@ -1,0 +1,28 @@
+=== RUN   TestNormalizeUsesCanonicalIDAndDirection
+--- PASS: TestNormalizeUsesCanonicalIDAndDirection (0.00s)
+=== RUN   TestMissingInnerThreadBindsOnlyToVerifiedContainer
+--- PASS: TestMissingInnerThreadBindsOnlyToVerifiedContainer (0.00s)
+=== RUN   TestExcludeExpiringAndNonText
+--- PASS: TestExcludeExpiringAndNonText (0.00s)
+=== RUN   TestDirectConversationIsValidated
+--- PASS: TestDirectConversationIsValidated (0.00s)
+=== RUN   TestBoundedHistoryCountsAndLimits
+--- PASS: TestBoundedHistoryCountsAndLimits (0.00s)
+=== RUN   TestPrivateProtocolInvalidRequest
+--- PASS: TestPrivateProtocolInvalidRequest (0.00s)
+=== RUN   TestSafeErrorDoesNotExposeResponse
+--- PASS: TestSafeErrorDoesNotExposeResponse (0.00s)
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload/server_error
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload/redirect
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload/reload
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload/network_error
+=== RUN   TestSendNeverRetriesHTTPErrorRedirectOrReload/success
+--- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload (0.00s)
+    --- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload/server_error (0.00s)
+    --- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload/redirect (0.00s)
+    --- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload/reload (0.00s)
+    --- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload/network_error (0.00s)
+    --- PASS: TestSendNeverRetriesHTTPErrorRedirectOrReload/success (0.00s)
+PASS
+ok  	go.mau.fi/mautrix-meta/cmd/beeperlocal-ig	0.612s

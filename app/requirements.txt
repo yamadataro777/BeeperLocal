@@ -1,0 +1,7 @@
+# Direct dependencies pinned to versions checked in upstream documentation/PyPI.
+# This is NOT a fully hash-locked dependency graph; see docs/SECURITY.md.
+Telethon==1.45.0
+keyring==25.7.0
+
+# AES-256-GCM authenticated encryption for local message payloads.
+cryptography==46.0.4

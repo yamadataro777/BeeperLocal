@@ -1,0 +1,216 @@
+75 INFO: PyInstaller: 6.22.3, contrib hooks: 2026.7
+75 INFO: Python: 3.13.12
+86 INFO: Platform: macOS-26.5.2-arm64-arm-64bit-Mach-O
+86 INFO: Python environment: /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv
+86 INFO: wrote /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-build/beeperlocal-core.spec
+88 INFO: Removing temporary files and cleaning cache in /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/.pyinstaller-cache/pyinstaller
+1454 INFO: Module search paths (PYTHONPATH):
+['/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000'
+ '検証/BeeperLocal_PoC_v0.4_Phase1',
+ '/opt/homebrew/Cellar/python@3.13/3.13.12_1/Frameworks/Python.framework/Versions/3.13/lib/python313.zip',
+ '/opt/homebrew/Cellar/python@3.13/3.13.12_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13',
+ '/opt/homebrew/Cellar/python@3.13/3.13.12_1/Frameworks/Python.framework/Versions/3.13/lib/python3.13/lib-dynload',
+ '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000'
+ '検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages',
+ '/opt/homebrew/opt/python-tk@3.13/libexec',
+ '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000'
+ '検証/BeeperLocal_PoC_v0.4_Phase1/scripts',
+ '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000'
+ '検証/BeeperLocal_PoC_v0.4_Phase1']
+1573 INFO: Appending 'datas' from .spec
+1573 INFO: checking Analysis
+1573 INFO: Building Analysis because Analysis-00.toc is non existent
+1573 INFO: Looking for Python shared library...
+1577 INFO: Using Python shared library: /opt/homebrew/Cellar/python@3.13/3.13.12_1/Frameworks/Python.framework/Versions/3.13/Python
+1577 INFO: Running Analysis Analysis-00.toc
+1577 INFO: Target bytecode optimization level: 0
+1577 INFO: Initializing module dependency graph...
+1578 INFO: Initializing module graph hook caches...
+1587 INFO: Analyzing modules for base_library.zip ...
+2406 INFO: Processing standard module hook 'hook-encodings.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+2632 INFO: Processing standard module hook 'hook-math.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+3591 INFO: Processing standard module hook 'hook-pickle.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+4213 INFO: Processing standard module hook 'hook-heapq.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+4538 INFO: Caching module dependency graph...
+4564 INFO: Analyzing /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/scripts/desktop_entry.py
+4707 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+4850 INFO: Processing standard module hook 'hook-xml.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5058 INFO: Processing standard module hook 'hook-sysconfig.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5069 INFO: Processing standard module hook 'hook-_osx_support.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5072 INFO: Processing standard module hook 'hook-_ctypes.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5398 INFO: Processing standard module hook 'hook-platform.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5460 INFO: Processing standard module hook 'hook-keyring.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+5734 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+5735 INFO: SetuptoolsInfo: initializing cached setuptools info...
+5982 INFO: Setuptools: 'jaraco' appears to be a partial setuptools-vendored copy - extending search paths to ['/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/jaraco', '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/setuptools/_vendor/jaraco']!
+5983 INFO: Processing pre-safe-import-module hook 'hook-jaraco.context.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6148 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6149 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+6153 INFO: Processing standard module hook 'hook-setuptools.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+6162 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6184 INFO: Processing pre-safe-import-module hook 'hook-jaraco.functools.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6192 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6292 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6376 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6719 INFO: Processing pre-safe-import-module hook 'hook-jaraco.text.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+6720 INFO: Setuptools: 'jaraco.text' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco.text'!
+6728 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+6728 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+7048 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+7049 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
+7515 INFO: Processing pre-safe-import-module hook 'hook-wheel.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+7520 INFO: Setuptools: 'wheel' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.wheel'!
+7656 INFO: Processing pre-safe-import-module hook 'hook-importlib_metadata.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+7659 INFO: Setuptools: 'importlib_metadata' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.importlib_metadata'!
+7679 INFO: Processing standard module hook 'hook-setuptools._vendor.importlib_metadata.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+7702 INFO: Processing pre-safe-import-module hook 'hook-zipp.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+7705 INFO: Setuptools: 'zipp' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.zipp'!
+7765 INFO: Processing standard module hook 'hook-sqlite3.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+7894 INFO: Processing standard module hook 'hook-cryptography.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+8316 INFO: hook-cryptography: cryptography does not seem to be using dynamically linked OpenSSL.
+8419 INFO: Processing standard module hook 'hook-pydantic.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+8985 INFO: Processing standard module hook 'hook-zoneinfo.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+9834 INFO: Processing standard module hook 'hook-anyio.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+10693 INFO: Processing standard module hook 'hook-opentelemetry.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+10949 INFO: Processing standard module hook 'hook-uvicorn.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+11595 INFO: Processing standard module hook 'hook-difflib.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+11679 INFO: Processing standard module hook 'hook-webbrowser.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks'
+12756 INFO: Processing standard module hook 'hook-jsonschema.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+12944 INFO: Processing standard module hook 'hook-jsonschema_specifications.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/stdhooks'
+13071 INFO: Analyzing hidden import 'uvicorn.__main__'
+13072 INFO: Analyzing hidden import 'uvicorn.lifespan'
+13072 INFO: Analyzing hidden import 'uvicorn.lifespan.off'
+13073 INFO: Analyzing hidden import 'uvicorn.lifespan.on'
+13077 INFO: Analyzing hidden import 'uvicorn.loops'
+13078 INFO: Analyzing hidden import 'uvicorn.loops.asyncio'
+13078 INFO: Analyzing hidden import 'uvicorn.loops.auto'
+13079 INFO: Analyzing hidden import 'uvicorn.loops.zuvloop'
+13080 INFO: Analyzing hidden import 'uvicorn.protocols.http.auto'
+13080 INFO: Analyzing hidden import 'uvicorn.protocols.websockets.auto'
+13081 INFO: Analyzing hidden import 'uvicorn.workers'
+13084 INFO: Analyzing hidden import 'mcp.server.__main__'
+13085 INFO: Analyzing hidden import 'mcp.server.apps'
+13090 INFO: Analyzing hidden import 'mcp.server.fastmcp'
+13091 INFO: Processing module hooks (post-graph stage)...
+13412 INFO: Processing pre-safe-import-module hook 'hook-gi.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/pre_safe_import_module'
+13797 INFO: Performing binary vs. data reclassification (59 entries)
+13808 INFO: Looking for ctypes DLLs
+13839 INFO: Analyzing run-time hooks ...
+13843 INFO: Including run-time hook 'pyi_rth_inspect.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/rthooks'
+13845 INFO: Including run-time hook 'pyi_rth_pkgutil.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/rthooks'
+13847 INFO: Including run-time hook 'pyi_rth_multiprocessing.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/rthooks'
+13848 INFO: Including run-time hook 'pyi_rth_setuptools.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/hooks/rthooks'
+13849 INFO: Including run-time hook 'pyi_rth_cryptography_openssl.py' from '/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/_pyinstaller_hooks_contrib/rthooks'
+13860 INFO: Creating base_library.zip...
+13875 INFO: Looking for dynamic libraries
+14004 INFO: Warnings written to /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-build/beeperlocal-core/warn-beeperlocal-core.txt
+14041 INFO: Graph cross-reference written to /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-build/beeperlocal-core/xref-beeperlocal-core.html
+14106 INFO: checking PYZ
+14106 INFO: Building PYZ because PYZ-00.toc is non existent
+14106 INFO: Building PYZ (ZlibArchive) /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-build/beeperlocal-core/PYZ-00.pyz
+14687 INFO: Building PYZ (ZlibArchive) /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-build/beeperlocal-core/PYZ-00.pyz completed successfully.
+14704 INFO: EXE target arch: arm64
+14704 INFO: Code signing identity: None
+14706 INFO: checking PKG
+14706 INFO: Building PKG because PKG-00.toc is non existent
+14707 INFO: Building PKG (CArchive) beeperlocal-core.pkg
+20211 INFO: Building PKG (CArchive) beeperlocal-core.pkg completed successfully.
+20215 INFO: Bootloader /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/.desktop-venv/lib/python3.13/site-packages/PyInstaller/bootloader/Darwin-64bit/run
+20215 INFO: checking EXE
+20215 INFO: Building EXE because EXE-00.toc is non existent
+20215 INFO: Building EXE from EXE-00.toc
+20218 INFO: Copying bootloader EXE to /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-dist/beeperlocal-core
+20219 INFO: Converting EXE to target arch (arm64)
+20234 INFO: Removing signature(s) from EXE
+20254 INFO: Modifying Mach-O image UUID(s) in EXE
+20268 INFO: Appending PKG archive to EXE
+20290 INFO: Fixing EXE headers for code signing
+20293 INFO: Re-signing the EXE
+20349 INFO: Building EXE from EXE-00.toc completed successfully.
+20353 INFO: Build complete! The results are available in: /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/core-dist
+
+> beeperlocal-desktop@0.6.0 tauri
+> tauri build --bundles app
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `npm run build`
+
+> beeperlocal-desktop@0.6.0 build
+> tsc --noEmit && vite build
+
+vite v8.3.1 building client environment for production...
+transforming...
+✓ 21 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.35 kB │ gzip:  0.26 kB
+dist/assets/index-57rAZSyp.css   15.46 kB │ gzip:  4.40 kB
+dist/assets/index-5wcsXcb4.js   255.37 kB │ gzip: 79.67 kB
+
+✓ built in 106ms
+   Compiling serde_core v1.0.229
+   Compiling web_atoms v0.2.6
+   Compiling thiserror v2.0.21
+   Compiling selectors v0.38.0
+   Compiling markup5ever v0.39.0
+   Compiling html5ever v0.39.0
+   Compiling dom_query v0.28.0
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling semver v1.0.28
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling uuid v1.26.1
+   Compiling erased-serde v0.4.10
+   Compiling camino v1.2.6
+   Compiling serde_with v3.24.0
+   Compiling bitflags v2.13.2
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling cfb v0.14.0
+   Compiling objc2-core-foundation v0.3.2
+   Compiling url v2.5.8
+   Compiling indexmap v1.9.3
+   Compiling cargo-platform v0.1.9
+   Compiling plist v1.10.1
+   Compiling jsonptr v0.7.1
+   Compiling cargo_metadata v0.19.2
+   Compiling serde-untagged v0.1.9
+   Compiling swift-rs v1.0.8
+   Compiling infer v0.22.0
+   Compiling schemars v0.8.22
+   Compiling json-patch v4.2.0
+   Compiling urlpattern v0.6.0
+   Compiling rustc_version v0.4.1
+   Compiling objc2-foundation v0.3.2
+   Compiling embed-resource v3.0.11
+   Compiling cargo_toml v1.0.1
+   Compiling tauri-winres v0.3.6
+   Compiling dpi v0.1.2
+   Compiling tauri-utils v2.10.0
+   Compiling core-graphics-types v0.2.0
+   Compiling core-graphics v0.25.0
+   Compiling dispatch2 v0.3.1
+   Compiling keyboard-types v0.8.3
+   Compiling png v0.18.1
+   Compiling serialize-to-javascript v0.1.2
+   Compiling objc2-quartz-core v0.3.2
+   Compiling objc2-app-kit v0.3.2
+   Compiling tauri-build v2.7.0
+   Compiling tauri-codegen v2.7.0
+   Compiling tauri v2.12.0
+   Compiling tauri-macros v2.7.0
+   Compiling beeperlocal-desktop v0.6.0 (/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/src-tauri)
+   Compiling objc2-web-kit v0.3.2
+   Compiling tao v0.37.1
+   Compiling muda v0.20.0
+   Compiling window-vibrancy v0.8.1
+   Compiling wry v0.57.0
+   Compiling tauri-runtime v2.12.0
+   Compiling tauri-runtime-wry v2.12.0
+    Finished `release` profile [optimized] target(s) in 1m 13s
+       Built application at: /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/src-tauri/target/release/beeperlocal-desktop
+    Bundling BeeperLocal.app (/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/src-tauri/target/release/bundle/macos/BeeperLocal.app)
+    Finished 1 bundle at:
+        /Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/src-tauri/target/release/bundle/macos/BeeperLocal.app (40.66 MiB)
+
+/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal_PoC_v0.4_Phase1/desktop/src-tauri/target/release/bundle/macos/BeeperLocal.app: replacing existing signature

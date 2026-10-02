@@ -1,0 +1,81 @@
+{
+  "started_at": "2026-10-01T15:04:14.993146+09:00",
+  "version": "0.8.2",
+  "user_authorized_sleep_now": true,
+  "status": "WAKE_UI_CHECKED_LINE_MANUAL_RECOVERY_IG_LIVE_PENDING",
+  "before_processes": [
+    {
+      "pid": 8817,
+      "ppid": 1,
+      "executable": "beeperlocal-desktop"
+    },
+    {
+      "pid": 8830,
+      "ppid": 8817,
+      "executable": "beeperlocal-core"
+    },
+    {
+      "pid": 8832,
+      "ppid": 8830,
+      "executable": "beeperlocal-core"
+    },
+    {
+      "pid": 8889,
+      "ppid": 8832,
+      "executable": "beeperlocal-ig"
+    }
+  ],
+  "before_ui_observation": "UNAVAILABLE_CG_WINDOW_NOT_FOUND",
+  "sleep_verified": false,
+  "provider_recovery_verified": false,
+  "updated_at": "2026-10-01T15:13:18.083655+09:00",
+  "native_power_command_exit": 71,
+  "native_power_error_code": "0xe00002e2",
+  "noninteractive_admin_attempt": "PASSWORD_REQUIRED",
+  "user_reported_manual_sleep_and_wake": true,
+  "user_reported_at": "2026-10-01T15:07:30.763930+09:00",
+  "after_processes": [
+    {
+      "pid": 8817,
+      "ppid": 1,
+      "elapsed": "01:33:23",
+      "executable": "beeperlocal-desktop"
+    },
+    {
+      "pid": 8830,
+      "ppid": 8817,
+      "elapsed": "01:33:22",
+      "executable": "beeperlocal-core"
+    },
+    {
+      "pid": 8832,
+      "ppid": 8830,
+      "elapsed": "01:33:22",
+      "executable": "beeperlocal-core"
+    },
+    {
+      "pid": 8889,
+      "ppid": 8832,
+      "elapsed": "01:33:06",
+      "executable": "beeperlocal-ig"
+    }
+  ],
+  "main_process_unchanged": true,
+  "power_log_read_exit": 0,
+  "power_events_since_test": [],
+  "instagram_after_wake_waiting_ui": true,
+  "instagram_saved_reply_ui_preserved": true,
+  "manual_provider_reconnect_used": false,
+  "sleep_verified_by_power_log": false,
+  "line_after_wake_state": "SYNC_RETRY_EXHAUSTED",
+  "line_after_wake_conversations": 45,
+  "line_watcher_already_absent_before_sleep": true,
+  "line_sleep_causality": "NOT_ESTABLISHED",
+  "line_manual_reconnect_used": true,
+  "line_manual_reconnect_count": 1,
+  "line_after_manual_reconnect_waiting": true,
+  "line_after_manual_reconnect_conversations": 45,
+  "power_log_corroboration": "NO_EVENT_IN_TEST_INTERVAL",
+  "sleep_evidence": "USER_REPORT_ONLY",
+  "instagram_live_receive_after_wake": "PENDING_USER_REPLY"
+}

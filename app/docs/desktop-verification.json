@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-30",
+  "desktop_version": "0.5.0",
+  "platform": "macOS-arm64",
+  "python_fixture_tests": {"passed": 187, "skipped": 0},
+  "playwright_chrome_fixture_tests": {"passed": 6},
+  "shell_syntax_passed": true,
+  "offline_demo_passed": true,
+  "typescript_and_vite_build_passed": true,
+  "rust_release_build_passed": true,
+  "packaged_core_ping_passed": true,
+  "mac_app_window_observed": true,
+  "final_bundle_ad_hoc_signature_verified": true,
+  "production_fixture_data_present": false,
+  "desktop_live_connection": "KEYCHAIN_ACCESS_REQUIRED",
+  "desktop_live_catalog_verified": false,
+  "desktop_live_history_verified": false,
+  "desktop_live_search_verified": false,
+  "real_messages_sent_in_this_verification": 0,
+  "user_report": "Keychain confirmation appears, but Allow repeats or does not proceed.",
+  "notes": "Fixture tests are not live-provider evidence. Prior CLI live evidence is recorded separately in PROJECT_STATE.md. Ad-hoc integrity signing is not Developer ID signing or notarization."
+}

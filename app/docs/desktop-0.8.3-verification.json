@@ -1,0 +1,39 @@
+{
+  "version": "0.8.3",
+  "date": "2026-10-01",
+  "scope": "LINE sustained transient-error recovery",
+  "core_tests": {
+    "passed": 325,
+    "skipped": 0
+  },
+  "ui_tests": {
+    "passed": 25
+  },
+  "frozen_release_source_tests": {
+    "total": 325,
+    "passed_before_build": 323,
+    "skipped_before_build": 2,
+    "skipped_binary_tests_passed_after_build": 2
+  },
+  "production_build": "passed",
+  "offline_demo": "passed",
+  "shell_syntax": "passed",
+  "signing": {
+    "mode": "release",
+    "executables_verified": 4,
+    "embedded_binaries_verified": 67,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "installation_record": "desktop-0.8.3-install.json",
+  "live_record": "desktop-0.8.3-line-live.json",
+  "live_seven_interruptions_recovered": true,
+  "main_source_changes_since_frozen_snapshot": [],
+  "remaining": [
+    "physical sleep and network outage",
+    "long duration operation",
+    "history beyond bounded LINE 100 / Instagram 20",
+    "atomic cursor and database persistence",
+    "notarization and another Mac"
+  ]
+}

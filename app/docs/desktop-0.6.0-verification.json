@@ -1,0 +1,86 @@
+{
+  "version": "0.6.0",
+  "date": "2026-09-30",
+  "scope": "LINE bounded reconnect + scoped local MCP + storage controls",
+  "core_tests": {
+    "passed": 219,
+    "skipped": 0,
+    "kind": "fixture",
+    "log": "desktop-0.6.0-test-run.txt"
+  },
+  "http_followup": {
+    "passed": 5,
+    "kind": "real_loopback_tcp_with_synthetic_line_adapter",
+    "log": "desktop-0.6.0-http-test-run.txt",
+    "protocol_modes": [
+      "auto",
+      "legacy"
+    ],
+    "tools": [
+      "list_conversations",
+      "get_messages",
+      "search_messages",
+      "send_message"
+    ]
+  },
+  "ui_tests": {
+    "passed": 11,
+    "kind": "chrome_fixture",
+    "log": "desktop-0.6.0-ui-test-run.txt"
+  },
+  "build": {
+    "success": true,
+    "log": "desktop-0.6.0-build-final.txt",
+    "runtime_check": true,
+    "codesign_deep_strict": true,
+    "production_fixture_excluded": true,
+    "package_report": "desktop-0.6.0-package-verification.json"
+  },
+  "shell_syntax": {
+    "passed": true,
+    "files": 4
+  },
+  "offline_demo": {
+    "passed": true,
+    "live_evidence": false
+  },
+  "packaged_live_read_only": {
+    "packaged_core_started": true,
+    "connection": "connected",
+    "local_conversations_before": 500,
+    "live_conversations": 500,
+    "selected_conversation_present": true,
+    "real_send_executed": false,
+    "local_messages": 1,
+    "recovery_receipt_present": true,
+    "history_bounded": true,
+    "live_saved_text_found_locally": true,
+    "watch_process_started": false,
+    "stopped_cleanly": true
+  },
+  "native_gui": {
+    "version": "0.6.0",
+    "connection_confirmation_visible": true,
+    "watch_waiting_visible": true,
+    "composer_visible": true,
+    "mcp_settings_visible": true,
+    "mcp_stopped": true,
+    "clients_registered": 0,
+    "read_default": true,
+    "send_default": false,
+    "storage_controls_visible": true,
+    "real_send_executed": false,
+    "real_data_deleted": false
+  },
+  "previous_roundtrip_evidence": "desktop-0.5.1-post-reboot-verification.json (not MCP evidence)",
+  "remaining": [
+    "long-running real disconnect/sleep/logout verification",
+    "complete history and cursor/commit acknowledgement",
+    "delete/unsend reconciliation",
+    "selected real AI client configuration",
+    "complete communication capture and third-party security audit",
+    "Developer ID signing/notarization"
+  ],
+  "security_design": "ADR_LOCAL_MCP.md",
+  "communication_review": "COMMUNICATION_PATHS.md"
+}

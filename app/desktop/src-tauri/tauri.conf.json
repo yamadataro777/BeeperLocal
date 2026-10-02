@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "BeeperLocal",
+  "version": "0.8.3",
+  "identifier": "local.beeperlocal.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "BeeperLocal",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 640,
+        "minHeight": 500,
+        "backgroundColor": "#f5f6f8"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app"
+    ],
+    "category": "SocialNetworking",
+    "shortDescription": "LINEとInstagramの会話を、このMacに。",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns"
+    ],
+    "externalBin": [
+      "binaries/beeperlocal-core",
+      "binaries/line",
+      "binaries/beeperlocal-ig"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "resources": [
+      "resources/LINE-CLI-LICENSE.txt",
+      "resources/LINE-CLI-PROVENANCE.md",
+      "resources/INSTAGRAM-LICENSE.txt",
+      "resources/INSTAGRAM-LICENSE.exceptions",
+      "resources/INSTAGRAM-PROVENANCE.md"
+    ]
+  }
+}

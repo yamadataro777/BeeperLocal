@@ -1,0 +1,20 @@
+{
+  "status": "CLOSED",
+  "versions": {
+    "approved_send": "0.8.1",
+    "delivery_and_first_reply": "0.8.1",
+    "watch_only_second_reply": "0.8.2"
+  },
+  "approved_send_count": 1,
+  "provider_accepted_send": true,
+  "recipient_delivery_user_confirmed": true,
+  "first_reply_displayed": true,
+  "first_reply_restart_search_count": 1,
+  "second_reply_live_watch_verified": true,
+  "same_app_and_adapter_process": true,
+  "manual_refresh_during_second_reply": false,
+  "second_reply_display_count": 1,
+  "second_reply_restart_search_count": 1,
+  "raw_message_data_recorded": false,
+  "updated_at": "2026-10-01T13:35:15.998932+09:00"
+}

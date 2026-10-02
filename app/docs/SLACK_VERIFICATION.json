@@ -1,0 +1,375 @@
+{
+  "date_jst": "2026-10-01",
+  "implementation": "IMPLEMENTED_WITH_DOCUMENTED_LIMITS",
+  "authentication": "EXISTING_SLACK_USER_OAUTH_UNCHANGED",
+  "code_changed": [
+    "beeperlocal/mcp_access.py",
+    "beeperlocal/cli.py",
+    "beeperlocal/desktop_control.py",
+    "beeperlocal/errors.py",
+    "beeperlocal/desktop_router.py",
+    "beeperlocal/outbox.py",
+    "beeperlocal/mcp_server.py",
+    "beeperlocal/desktop.py",
+    "beeperlocal/connectors/registry.py",
+    "beeperlocal/connectors/slack.py",
+    "tests/test_line_core.py",
+    "desktop/src/main.tsx",
+    "desktop/src/types.ts",
+    "desktop/src/bridge.ts",
+    "desktop/src/SettingsPanel.tsx",
+    "desktop/src/fixture.ts",
+    "desktop/src-tauri/src/main.rs",
+    "README.md",
+    "docs/IMPLEMENTATION_PLAN.md",
+    "docs/NEXT_IMPLEMENTATION.md",
+    "docs/PROJECT_STATE.md",
+    "beeperlocal/desktop_slack.py",
+    "beeperlocal/slack_cli.py",
+    "tests/test_slack_extension.py",
+    "desktop/tests/slack.spec.ts",
+    "scripts/slack-live-read-check.py",
+    "slack-send-app-manifest.json",
+    "docs/SLACK_IMPLEMENTATION.md",
+    "tests/test_slack_reliability.py"
+  ],
+  "local_tests": {
+    "core": {
+      "status": "PASS",
+      "tests": 331,
+      "skipped": 0,
+      "log": "../../slack-integration-work/reliability-core-tests.txt",
+      "includes_separately_added_line_receiver_recovery_tests": 10
+    },
+    "slack_existing": {
+      "status": "PASS",
+      "tests": 33
+    },
+    "slack_added": {
+      "status": "PASS",
+      "tests": 28,
+      "includes_real_loopback_mcp_sdk": true
+    },
+    "desktop_ui": {
+      "status": "PASS",
+      "tests": 24,
+      "log": "../../slack-integration-work/ui-tests.txt"
+    },
+    "frontend_production_build": "PASS",
+    "native_cargo_check_offline": "PASS",
+    "shell_syntax": {
+      "status": "PASS",
+      "files": 6,
+      "log": "../../slack-integration-work/reliability-shell-checks.json"
+    },
+    "offline_demo": "PASS",
+    "instagram_adapter": {
+      "status": "PASS",
+      "packages": 3,
+      "log": "../../slack-integration-work/instagram-go-tests.txt"
+    },
+    "x_connector": {
+      "status": "PASS",
+      "tests": 18
+    },
+    "x_contract": {
+      "status": "PASS",
+      "tests": 12
+    },
+    "x_adapter": {
+      "status": "PASS",
+      "packages": 1,
+      "public_bootstrap_opt_in_probe": "NOT_RUN"
+    },
+    "line_adapter_race": {
+      "status": "PASS",
+      "packages_with_tests": 9,
+      "packages_without_tests": 2,
+      "live_tests": "DISABLED",
+      "log": "../../slack-integration-work/line-go-tests.txt"
+    },
+    "slack_app_attribution_regression": {
+      "status": "PASS",
+      "new_tests": 2,
+      "before_fix": "FAIL_BOTH_REPRODUCED",
+      "slack_total_tests": 61,
+      "full_suite_status": "PASS"
+    },
+    "slack_reliability": {
+      "status": "PASS",
+      "tests": 6,
+      "slack_total_tests": 67,
+      "before_fix": "REPRODUCED_FAILURES",
+      "new_live_provider_tests": 0
+    },
+    "offline_demo_log": "../../slack-integration-work/reliability-offline-demo.txt"
+  },
+  "live_read_check": {
+    "live_send_attempts": 0,
+    "auth": "USER_OAUTH_CONFIRMED",
+    "history": "PASS",
+    "encrypted_persistence": "PASS",
+    "reopen": "PASS",
+    "search": "PASS",
+    "conversations_fetched": 1,
+    "messages_fetched": 1,
+    "conversation_kinds": [
+      "channel"
+    ]
+  },
+  "live_account_e2e": {
+    "status": "PUBLIC_CHANNEL_SEND_AND_SAME_USER_REMOTE_POST_POLLING_VERIFIED",
+    "send_attempts": 2,
+    "send_authorization": "INITIAL_SINGLE_TEST_THEN_NEW_POST_FIX_SINGLE_TEST_APPROVED",
+    "personal_dm": "UNVERIFIED",
+    "group_dm": "UNVERIFIED",
+    "private_channel": "UNVERIFIED",
+    "thread_replies": "UNVERIFIED",
+    "new_message_polling": "PASS_SAME_AUTHENTICATED_USER_OTHER_CLIENT",
+    "recipient_delivery": "UNVERIFIED",
+    "restart_after_new_reply": "UNVERIFIED",
+    "new_mcp_live_client": "NOT_CREATED",
+    "approved_target_verified": true,
+    "scope_change": "USER_CHAT_WRITE_GRANTED_VERIFIED",
+    "browser_login": "CONFIRMED_HARUO",
+    "oauth_preparation": {
+      "existing_installed_app_identified": true,
+      "requested_user_scopes_count": 9,
+      "added_user_scope": "chat:write",
+      "bot_scopes_added": false,
+      "granted_user_chat_write": true,
+      "approval_screenshot": "../../slack-integration-work/slack-permission-approval.jpg",
+      "reauthorization": "COMPLETED_OBSERVED_ON_RESUME",
+      "agent_clicked_allow": false
+    },
+    "client_acknowledgement": "PASS_POST_FIX_NEW_TEST",
+    "sender_identity": "SELF_USER_CONFIRMED_IN_SEND_RESPONSE_AND_HISTORY",
+    "matched_test_posts": 2,
+    "encrypted_store_reopen_search": "PASS_SEND_AND_NEW_REMOTE_POST",
+    "unknown_request_resend_block": "PASS",
+    "outbox_record_status": "initial_unknown_preserved; post_fix_acknowledged",
+    "post_fix_live_send_ack": "PASS",
+    "reply_receive": "UNVERIFIED",
+    "poll_interval_seconds": 65,
+    "polling_completed_polls": 1,
+    "polling_test_posts": 1,
+    "duplicate_suppression_after_reopen": "PASS_POST_FIX_NEW_TEST",
+    "other_member_incoming": "UNVERIFIED",
+    "mac_restart": "NOT_TESTED",
+    "network_reconnect": "NOT_TESTED",
+    "evidence_precedes_reliability_improvements": true
+  },
+  "commercial_distribution": {
+    "official_requirements_reviewed": true,
+    "product_eligibility": "UNCONFIRMED",
+    "marketplace_approval": "NOT_CONFIRMED",
+    "sale_ready": false,
+    "blocking_questions": [
+      "Local message retention/export eligibility",
+      "Automation platform user history scope restrictions",
+      "External AI data authorization and retention",
+      "Marketplace or separate distribution agreement"
+    ]
+  },
+  "shipped_app_replaced": false,
+  "provider_credentials_exported": false,
+  "private_messages_logged": false,
+  "source_hashes": {
+    "README.md": "963975340e861f122cd9e3a3e7c46be23439f2bab5b68164f75f39968b09a54c",
+    "beeperlocal/cli.py": "c62c7576c4bbb22e19f65f726eca47cc8e1f59a5b9dd1203059e4e7f8587dfb2",
+    "beeperlocal/connectors/registry.py": "2a290c82bcf7bbcb42f8c41704cb178f363057ee03b653d546b8a24f84070168",
+    "beeperlocal/connectors/slack.py": "aed130a58b228b61c629da7accdac280ca3c423b5a0624132700f9f9b239d0f9",
+    "beeperlocal/desktop.py": "6ed21fcd0b88bb2860748e9838e6c30b252ca6a50f0b4dc150d12b0503b8c35d",
+    "beeperlocal/desktop_control.py": "5721288d56b7a737ae9753861bbd04de88a05e4426efb08845b72a156c6940cb",
+    "beeperlocal/desktop_router.py": "d15038c97aea71a45067203f367cd4afe7a5ca638906253fa43714939abeba5f",
+    "beeperlocal/desktop_slack.py": "7940d0b3c20eda626b0c0c6be32e2c0da6b694a3c77a08020b0af187fdcbcff4",
+    "beeperlocal/errors.py": "c6f8d8a7fd1fc507b61613e31e5124f9decdeb456bc279d87ae0aa8e92ceac6f",
+    "beeperlocal/mcp_access.py": "4b20a0deb72504cbc963ed55f49781112b3388e31b7a34903b372ba501d7be55",
+    "beeperlocal/mcp_server.py": "a13a5a380eabe2b82e278492b95297472e1508aec08a38980db356ca915a08ad",
+    "beeperlocal/outbox.py": "604a2ae855a2ccd3ed18bbe56c64408a7ecf0ab79e5988de536399c181993f36",
+    "beeperlocal/slack_cli.py": "9890f22e7fe4604b65276877c92fce4fc8e976190275f324760b4abbd64ebba2",
+    "desktop/src-tauri/src/main.rs": "005afdf88eb0dc7465c784eaee5efc6c6b0bb77f0df36511299f220a67ece1e0",
+    "desktop/src/SettingsPanel.tsx": "2051ab3893e4878130e90f7b8b405d24f9637fa357bcda31cbcb69d853bafc84",
+    "desktop/src/bridge.ts": "da07ba024473dc5089330c47c915e4f51929d31bd1309a9c3961bb4602469632",
+    "desktop/src/fixture.ts": "74a5a68fd05dd321976d3b57d0b83a039693c9fdef213e3c63b44a6117ffce67",
+    "desktop/src/main.tsx": "44885b067f0e302a3cdaef2aad910f86cf29ca509af629948b9322e358cecb60",
+    "desktop/src/types.ts": "aa1b71f9207d2021e1933548a1e5f4aa7d51514f842670ea36ce35799e072795",
+    "desktop/tests/slack.spec.ts": "973af6c9aaa1208e8812ffa1f42a7fe69688b48c102b41793c553f00dfe673e4",
+    "docs/IMPLEMENTATION_PLAN.md": "3ba8b3c15bad2cd5442bb12f1fdda21bb0c3468ace7ec11525c61fac80bef9b6",
+    "docs/NEXT_IMPLEMENTATION.md": "8bb2014ff129b5fb7a85341d2585a91741c133546304094717b10fca09165de9",
+    "docs/PROJECT_STATE.md": "ea0ece5bdd0c8e3c4cef5770b51a041c5c71d7a498854627ae5963e9c38ac336",
+    "docs/SLACK_IMPLEMENTATION.md": "6fc7d1736180501003540517fb793ea4f2e5069eff7258083ab5ab8bf026c50b",
+    "scripts/slack-live-read-check.py": "dcac5f7ad99eef9ba10260aad2454dc89aaf8069a3fdd37c1a2dcdafe70da8f3",
+    "slack-send-app-manifest.json": "f7c92e57bc6d34890d2b79512b200af6d70ce59afe27b82e99629f5eb9ee5e03",
+    "tests/test_line_core.py": "aba4b044d164b81f9ef6583e2fbb3e7090ff26175f63d534f225747833701f11",
+    "tests/test_slack_extension.py": "da4c6559910b55286b034bdd3ad02017c62fd85f115a0249c443cdd368d1cad3",
+    "tests/test_line_receiver_recovery.py": "203c6387595298eb3feedb8e6f51016d37fcd6c5ce454a25492e00606602fcbe",
+    "tests/test_slack_reliability.py": "ebf5990b6303943a6e7d71a55342aca4bbb6b59f7ecf8e0e1147a58c285431c5"
+  },
+  "workspace_followup": {
+    "active_workspace_limit": 1,
+    "limitation_owner": "CURRENT_BEEPERLOCAL_IMPLEMENTATION",
+    "evidence": [
+      "MacKeychain provider=slack single entry",
+      "DesktopRouter.cores keyed by provider",
+      "DesktopCore and SlackConnector single account_id"
+    ],
+    "stored_identity": "team_id:user_id",
+    "local_tests": {
+      "status": "PASS",
+      "tests": 5,
+      "log": "../../slack-integration-work/workspace-followup-tests.txt"
+    },
+    "multiple_live_workspaces_tested": false
+  },
+  "approved_send_preflight": {
+    "auth": "USER_OAUTH_CONFIRMED",
+    "workspace_matches_approved_screenshot": true,
+    "channel_matches_approved_screenshot": true,
+    "user_chat_write": "PRESENT",
+    "send_attempts": 0,
+    "send": "NOT_ATTEMPTED",
+    "history_readback": "UNVERIFIED",
+    "encrypted_reopen_search": "UNVERIFIED",
+    "duplicate_suppression": "UNVERIFIED"
+  },
+  "historical_local_core_run": {
+    "status": "PASS",
+    "tests": 313,
+    "skipped": 0,
+    "log": "../../slack-integration-work/core-tests.txt",
+    "full_suite_run_tests": 312,
+    "additional_cli_boundary_test": {
+      "status": "PASS",
+      "tests": 1,
+      "log": "../../slack-integration-work/slack-cli-test.txt"
+    }
+  },
+  "approved_send_attempt": {
+    "auth": "USER_OAUTH_CONFIRMED",
+    "workspace_matches_approved_screenshot": true,
+    "channel_matches_approved_screenshot": true,
+    "user_chat_write": "PRESENT",
+    "send_attempts": 1,
+    "send": "RESULT_UNKNOWN",
+    "history_readback": "UNVERIFIED",
+    "encrypted_reopen_search": "UNVERIFIED",
+    "duplicate_suppression": "UNVERIFIED",
+    "error_code": "SLACK_SEND_UNKNOWN",
+    "reporting_correction": "Original status label remained NOT_ATTEMPTED despite the recorded single attempt; corrected without any new send."
+  },
+  "approved_send_inspection": {
+    "new_send_attempts": 0,
+    "history_readback": "PASS_ONE_MATCH",
+    "encrypted_reopen_search": "PASS",
+    "unknown_request_resend_block": "PASS",
+    "outbox_status": "unknown",
+    "matched_approved_test_messages": 1,
+    "matched_metadata": [
+      {
+        "sender_is_self": true,
+        "has_bot_id": true,
+        "has_app_id": true,
+        "is_bot_message_subtype": false,
+        "is_message_type": true
+      }
+    ]
+  },
+  "historical_initial_live_account_e2e": {
+    "status": "PARTIAL_SEND_VERIFIED_BY_HISTORY",
+    "send_attempts": 1,
+    "send_authorization": "APPROVED_FOR_SINGLE_SPECIFIED_TEST_MESSAGE",
+    "personal_dm": "UNVERIFIED",
+    "group_dm": "UNVERIFIED",
+    "private_channel": "UNVERIFIED",
+    "thread_replies": "UNVERIFIED",
+    "new_message_polling": "UNVERIFIED",
+    "recipient_delivery": "UNVERIFIED",
+    "restart_after_new_reply": "UNVERIFIED",
+    "new_mcp_live_client": "NOT_CREATED",
+    "approved_target_verified": true,
+    "scope_change": "USER_CHAT_WRITE_GRANTED_VERIFIED",
+    "browser_login": "CONFIRMED_HARUO",
+    "oauth_preparation": {
+      "existing_installed_app_identified": true,
+      "requested_user_scopes_count": 9,
+      "added_user_scope": "chat:write",
+      "bot_scopes_added": false,
+      "granted_user_chat_write": true,
+      "approval_screenshot": "../../slack-integration-work/slack-permission-approval.jpg",
+      "reauthorization": "COMPLETED_OBSERVED_ON_RESUME",
+      "agent_clicked_allow": false
+    },
+    "client_acknowledgement": "RESULT_UNKNOWN_BEFORE_FIX",
+    "sender_identity": "SELF_USER_CONFIRMED_IN_HISTORY",
+    "matched_test_posts": 1,
+    "encrypted_store_reopen_search": "PASS",
+    "unknown_request_resend_block": "PASS",
+    "outbox_record_status": "unknown",
+    "post_fix_live_send_ack": "NOT_RUN_NO_ADDITIONAL_SEND",
+    "reply_receive": "UNVERIFIED"
+  },
+  "post_fix_live_send": {
+    "auth": "USER_OAUTH_CONFIRMED",
+    "workspace_matches_approved_screenshot": true,
+    "channel_matches_approved_screenshot": true,
+    "user_chat_write": "PRESENT",
+    "send_attempts": 1,
+    "send": "ACKNOWLEDGED_SELF_USER_AND_CHANNEL_CONFIRMED",
+    "history_readback": "PASS",
+    "encrypted_reopen_search": "PASS",
+    "duplicate_suppression": "PASS",
+    "verification": "POST_FIX_NEW_APPROVED_TEST",
+    "evidence": "../../slack-integration-work/fixed-send-check.json"
+  },
+  "live_polling_receive": {
+    "send_attempts": 0,
+    "polling_receive": "PASS",
+    "poll_interval_seconds": 65,
+    "completed_polls": 1,
+    "reopen_search": "PASS",
+    "source_identity": "SAME_AUTHENTICATED_USER_OTHER_CLIENT",
+    "ready": true,
+    "matching_test_posts": 1,
+    "evidence": "../../slack-integration-work/fixed-receive-check.json",
+    "scope": "New top-level post made by the authenticated user in another Slack client; not a different sender or thread reply.",
+    "manual_fetch_used": false,
+    "core_recreated": true,
+    "mac_restarted": false
+  },
+  "historical_local_core_runs": [
+    {
+      "status": "PASS",
+      "tests": 321,
+      "skipped": 0,
+      "log": "../../slack-integration-work/core-tests-after-live-send-loopback.txt",
+      "includes_separately_added_line_receiver_recovery_tests": 6
+    }
+  ],
+  "deferred_by_user": [
+    "Live personal/group DM verification",
+    "Live reply from another workspace member"
+  ],
+  "reliability_improvements": {
+    "recent_history": {
+      "status": "IMPLEMENTED_LOCAL_TESTS_PASS",
+      "history_pages_per_operation": 1,
+      "max_raw_events_per_page": 15,
+      "explicit_sync_pagination": "UNCHANGED",
+      "empty_or_filtered_page_followed_by_more": "BOUNDED_SUCCESS_WITH_LIMITED_RECEIPT"
+    },
+    "literal_text": {
+      "status": "IMPLEMENTED_LOCAL_TESTS_PASS",
+      "entities": [
+        "&amp;",
+        "&lt;",
+        "&gt;"
+      ],
+      "decode_passes": 1,
+      "send_history_reopen_search": "PASS_FIXTURE"
+    },
+    "additional_live_send_attempts": 0,
+    "live_provider_verification": "NOT_RUN_AFTER_THESE_CHANGES",
+    "regular_app_replaced": false
+  }
+}

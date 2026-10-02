@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-01",
+  "version": "0.8.1",
+  "signature": "Developer ID Application",
+  "team_id": "8FJAQT4D6B",
+  "unit_tests_passed": 281,
+  "isolated_native_keychain": {
+    "native_item_preserved": true,
+    "legacy_item_preserved": true,
+    "cleanup_verified": true,
+    "production_items_accessed": false
+  },
+  "isolated_signed_update": {
+    "different_code_hashes": true,
+    "mutual_requirements_verified": true,
+    "keychain_operations_without_prompts": 6,
+    "cleanup_verified": true,
+    "production_items_accessed": false
+  },
+  "signature_verification": {
+    "mode": "release",
+    "executables_verified": 4,
+    "embedded_binaries_verified": 67,
+    "update_compatibility": "not_checked",
+    "notarization": "not_checked"
+  },
+  "frozen_runtime_ready": true,
+  "frozen_empty_value_guard": true,
+  "gui": {
+    "line_connected": true,
+    "line_conversations": 45,
+    "line_receiving": true,
+    "instagram_connected": true,
+    "instagram_receiving": true
+  },
+  "package": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal\u3000\u691c\u8a3c/BeeperLocal_PoC_v0.4_Phase1/releases/BeeperLocal-0.8.1-DeveloperID-AppleSilicon.zip",
+  "sha256": "81891ee4f36898320488f96cec7f8d2925d721571313dc2e85668fc95833a860",
+  "limitations": [
+    "notarization_not_performed",
+    "second_mac_validation_deferred_by_user",
+    "full_product_update_on_second_mac_not_tested"
+  ],
+  "note": "Initial inline codesign requirement syntax corrected; final verification passed. Keychain prompt counts for the production migration were not recorded."
+}

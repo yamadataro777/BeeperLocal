@@ -1,0 +1,800 @@
+BeeperLocal Project — Context Handoff
+Updated: 2026-09-29
+Purpose: 新しいChatGPT/CodexセッションへBeeperLocal開発の現在地を正確に引き継ぐためのコンテキストファイル
+
+==================================================
+0. このファイルの使い方
+==================================================
+
+新しいチャットを開始したら、このファイルを最初に読み込ませる。
+
+推奨プロンプト:
+
+「添付したBeeperLocal Context Handoffを読んでください。
+ここに記載された『観測済み事実』を前提として開発を継続してください。
+過去の失敗した仮説を再検証する必要はありません。
+まず『現在地』と『次のアクション』を確認してから作業を再開してください。」
+
+重要:
+このファイルは逐語的なチャットログではない。
+BeeperLocalを継続開発するために必要な設計判断、実機検証結果、失敗した仮説、未解決Gate、次の作業を圧縮したhandoffである。
+
+
+==================================================
+1. BeeperLocalの目的
+==================================================
+
+BeeperLocalの本質的な目的:
+
+Beeperのような複数メッセージサービス統合を、
+Beeper側のCloud Bridgeへ依存するのではなく、
+ユーザー自身のMac上でLocal-firstに実現する。
+
+単にメッセージ本文を何らかの方法で取得することが目的ではない。
+
+目標アーキテクチャ:
+
+Messaging Services
+    ↓
+Local Connectors
+    ↓
+UnifiedMessage
+    ↓
+Local encrypted storage
+    ↓
+Unified Inbox / Search / Send
+
+理想:
+
+Telegram ─┐
+Matrix ───┤
+Slack ────┼→ Local Connector Layer
+LINE ─────┤
+etc. ─────┘
+               ↓
+        UnifiedMessage
+               ↓
+         AES-256-GCM
+               ↓
+       Local SQLite DB
+               ↓
+      Search / Inbox / Send
+
+重要な設計思想:
+
+- Cloud Bridgeを極力使わない
+- メッセージ本文はLocal処理
+- credential/sessionはmacOS Keychain
+- 保存本文は暗号化
+- plaintext FTSを作らない
+- provider固有実装とUnifiedMessage層を分離
+- 技術的成立性と商用/規約成立性を別Gateとして扱う
+
+
+==================================================
+2. これまでのBeeperLocal PoC
+==================================================
+
+複数段階のPoCを作成した。
+
+初期PoC:
+- Telegram
+- Slack
+- Matrix
+
+その後Phase-1としてLocal Storeを追加。
+
+確認済み構成:
+
+provider
+    ↓
+fetch/sync
+    ↓
+Unified timeline
+    ↓
+encrypted payload
+    ↓
+SQLite
+
+セキュリティ:
+
+- AES-256-GCM
+- DB encryption key → macOS Keychain
+- 本文
+- 会話名
+- sender
+- provider側ID
+
+などを暗号化payload内へ格納。
+
+SQLiteにplaintext FTSは作成していない。
+
+実DB:
+
+~/Library/Application Support/BeeperLocalPoC/messages-v1.sqlite3
+
+
+==================================================
+3. Matrix / Slack 実機PoC
+==================================================
+
+Matrix:
+
+- Access Token login成功
+- conversation selection成功
+- real message取得成功
+- Local DB保存成功
+
+Slack:
+
+- login成功
+- conversation selection成功
+- real message取得成功
+- Local DB保存成功
+
+重要な実機証拠:
+
+Slackのテストchannelで、
+
+beeperlocal-test-927
+
+という実メッセージを送信。
+
+その後:
+
+./run.sh sync
+
+→ encrypted SQLiteへ保存
+
+./run.sh search --preview
+
+→ 復号後Local検索で
+
+beeperlocal-test-927
+
+がヒットした。
+
+したがって、
+
+Slack Server
+    ↓
+BeeperLocal connector
+    ↓
+UnifiedMessage
+    ↓
+AES-256-GCM
+    ↓
+SQLite
+    ↓
+Local search
+
+というClosed Loopは実機で成立済み。
+
+
+==================================================
+4. LINEが重要な理由
+==================================================
+
+日本でBeeperLocalを実用サービスとして成立させる場合、
+LINE接続は非常に重要なGate。
+
+当初は以下を検討した:
+
+- LINE公式API
+- Export
+- Accessibility
+- ScreenCapture/OCR
+- protocol-level connector
+
+結論として、本命は:
+
+LINE Server
+    ↓
+LINE protocol
+    ↓
+Local LINE Connector
+    ↓
+BeeperLocal
+
+である。
+
+画面OCR等は本質ではない。
+
+
+==================================================
+5. LINE Export
+==================================================
+
+LINE公式のトーク履歴Exportについては、
+Local importerとして利用可能なことを確認。
+
+これは:
+
+LINE Export
+    ↓
+Local import
+    ↓
+UnifiedMessage
+    ↓
+encrypted DB
+
+という初期履歴importには使える。
+
+ただし手動ExportなのでBeeper相当のリアルタイムConnectorではない。
+
+したがって補助経路として扱う。
+
+
+==================================================
+6. LINE Accessibility実験
+==================================================
+
+macOS版LINEに対してAccessibilityを実機検証した。
+
+LINE process:
+
+LINE_RUNNING
+
+activate後:
+
+windows=1
+visible=true
+
+Accessibility Tree自体は取得可能だった。
+
+最初の検証:
+
+elements_checked=404
+text_values=325
+
+しかし、画面上に表示されていたsentinel:
+
+beeperlocal-line-r3-928
+
+は:
+
+R3_AX_TEXT=NOT_FOUND
+
+さらに全Accessibility属性を検索:
+
+elements=229
+attributes=484
+strings=69
+
+結果:
+
+R3_AX_ALL=NOT_FOUND
+
+したがって、
+
+LINE UI自体はAccessibility Treeへかなり公開されているが、
+表示中のトーク本文は取得できなかった。
+
+重要:
+
+この結果からOCRへ進もうとしたが、
+「BeeperLocalの目的は画面からメッセージを抽出することではなく、
+Beeper型のprotocol connectorをLocalで動かすこと」
+と再整理した。
+
+Accessibility/OCR経路は本筋から外した。
+
+
+==================================================
+7. Beeper LINE implementationの発見
+==================================================
+
+重要な発見:
+
+BeeperのLINE Bridge実装が公開されている。
+
+upstream:
+
+beeper/line
+
+さらに、
+
+kongesque/line-cli
+
+を発見。
+
+line-cliはBeeper由来のLINE protocol implementationを
+Matrix/Beeper Bridgeから切り離し、
+ローカルCLIとして動かせるようにしたもの。
+
+これにより、
+
+LINE Server
+    ↕
+LINE protocol
+    ↕
+Mac local process
+
+を直接検証可能になった。
+
+これはOCR/Accessibilityではない。
+
+
+==================================================
+8. LINE CLI 実機環境
+==================================================
+
+インストール:
+
+Homebrew
+
+binary:
+
+/opt/homebrew/bin/line
+
+version:
+
+line v0.4.0
+line-cli 0.4.0
+
+確認したGit:
+
+v0.4.0 SHA:
+
+80d945ba582c0d1a59dbb4054d5c11e567021ab6
+
+current main SHA:
+
+80d945ba582c0d1a59dbb4054d5c11e567021ab6
+
+つまり:
+
+v0.4.0 == current main
+
+したがって、
+
+「release版は古いがmainでは修正済み」
+
+という仮説は棄却済み。
+
+
+==================================================
+9. LINE Local Connector — 実機成功結果
+==================================================
+
+以下は観測済み事実。
+
+9.1 Authentication
+
+line auth status --check
+
+SUCCESS
+
+9.2 Identity
+
+line whoami
+
+SUCCESS
+
+9.3 Chat list
+
+line chats
+
+SUCCESS
+
+実アカウントの:
+
+58 conversations
+
+を取得。
+
+したがって、
+
+Mac local process
+    ↓
+LINE session
+    ↓
+LINE Server
+    ↓
+real account
+    ↓
+real conversation list
+
+は成立。
+
+
+==================================================
+10. LINE Real-time Receive — CLOSED
+==================================================
+
+非常に重要な実機結果。
+
+Terminalで:
+
+line watch --json
+
+を起動。
+
+本文をTerminalに出さないテストとして:
+
+line watch --json 2>/dev/null |
+grep -m1 -F 'beeperlocal-line-live-929' >/dev/null &&
+echo 'L2_LIVE=FOUND'
+
+を使用。
+
+別LINEアカウントから:
+
+beeperlocal-line-live-929
+
+を送信。
+
+結果:
+
+L2_LIVE=FOUND
+
+が実際に表示された。
+
+したがって以下は実機でCLOSED:
+
+別LINE account
+    ↓
+LINE Server
+    ↓
+Mac上のlocal LINE protocol client
+    ↓
+live event stream
+    ↓
+local process
+
+重要:
+
+これはCloud Bridgeではない。
+OCRでもAccessibilityでもない。
+
+「LINEのリアルタイム受信をMac上のLocal Connectorで実現できる」
+
+というBeeperLocalの核心仮説の一部は実機成立済み。
+
+Gate:
+
+LINE LIVE RECEIVE = CLOSED
+
+
+==================================================
+11. LINE History — 現在FAILED
+==================================================
+
+以下を実行:
+
+line messages
+
+結果:
+
+line: LINE request failed; check your connection and LINE account settings
+
+Groupだけの問題か確認するため、
+Direct conversationでも:
+
+line messages "<Direct>" --limit 1
+
+を実行。
+
+同じfailure。
+
+したがって:
+
+Group history → FAILED
+Direct history → FAILED
+
+history path全体の問題と考えている。
+
+ただし:
+
+auth        SUCCESS
+whoami      SUCCESS
+chats       SUCCESS
+watch       SUCCESS
+
+なので、
+
+LINE接続全体が壊れているわけではない。
+
+
+==================================================
+12. LINE Send — 現在FAILED
+==================================================
+
+実在するDirect conversationへ一度だけ:
+
+line send "<Direct>" --text "beeperlocal-line-send-929"
+
+を実行。
+
+結果:
+
+LINE request failed; check your connection and LINE account settings
+
+送信成功は確認できなかった。
+
+重要:
+
+このsendは1回だけ実行。
+
+response loss時に実際にはLINE側でacceptされている可能性を考慮し、
+二重送信防止のため同じsendを再試行していない。
+
+今後も原因特定前にsendを再試行しない。
+
+
+==================================================
+13. line-cli Error Handling — 実コード確認済み
+==================================================
+
+以下はユーザーMac上のline-cli sourceから直接確認済み。
+
+
+13.1 History path
+
+internal/messaging/client.go:
+
+History()
+    ↓
+Session.Do(...)
+    ↓
+api.GetRecentMessagesV2(chat, limit)
+
+さらに:
+
+pkg/line/methods.go:
+
+GetRecentMessagesV2()
+    ↓
+callRPC(
+  "TalkService",
+  "getRecentMessagesV2",
+  chatMid,
+  limit
+)
+
+重要:
+
+HistoryではまずRPC取得を行い、
+その後にDecode/E2EE処理へ進む。
+
+したがって現在のhistory failureは、
+message decryptより前のRPC段階で発生している可能性がある。
+
+
+13.2 Send path
+
+Sendでは:
+
+Letter Sealing preparation
+    ↓
+ReserveSequence
+    ↓
+Message construction
+    ↓
+Session.Mutate(...)
+    ↓
+api.SendMessage(seq, msg)
+    ↓
+TalkService/sendMessage
+
+という経路。
+
+E2EE準備に失敗した場合には、
+
+could not prepare encrypted message...
+
+など専用errorを返すコードが存在する。
+
+今回実際に出たのはそれではなく、
+
+LINE request failed...
+
+なので、
+
+少なくともE2EE preparationを通過し、
+SendMessage RPC側まで進んだ後にfailureしている可能性が高い。
+
+
+==================================================
+14. RemoteError sanitization
+==================================================
+
+internal/session/manager.go に:
+
+type RemoteError struct {
+    Action string
+    cause error
+}
+
+が存在。
+
+RemoteError.Error() はraw causeをユーザーへ表示しない。
+
+non-auth errorの場合:
+
+LINE request failed; check your connection and LINE account settings
+
+へ変換する。
+
+つまり現在Terminalで見えているerrorは、
+LINE Serverから返された本当のerrorそのものではない。
+
+また:
+
+ProtocolError(err)
+
+が存在し、
+RemoteError内部のcauseをunwrapできる。
+
+ただしclassification用であり、
+raw protocol responseをそのまま表示してはいけない。
+
+
+==================================================
+15. Authentication / Token Refreshについて
+==================================================
+
+重要な訂正事項。
+
+過去のDeep Researchの一部回答で:
+
+「line-cliにはtoken refreshがない」
+「IsRefreshRequiredがない」
+「EncryptedKeyChain/E2EEPublicKeyがない」
+
+等の記述があった。
+
+これは誤り。
+
+ユーザーの実コードから以下が確認済み:
+
+RefreshAccessToken
+RefreshAccessTokenContext
+Manager.do
+IsRefreshRequired
+IsAuthError
+EncryptedKeyChain
+E2EEPublicKey
+
+が存在する。
+
+Manager.doでは:
+
+- RefreshDeadlineによるscheduled refresh
+- auth error検出
+- refresh tokenによるrefresh
+- read-only callのretry
+- mutationをreplayしない処理
+
+が存在。
+
+IsRefreshRequiredは少なくとも:
+
+- code 119
+- "access token refresh required"
+- MUST_REFRESH_V3_TOKEN
+- TokenAuthException code 4
+
+を認識する。
+
+したがって、
+
+「code 119がrefreshされずgeneric errorになっている」
+
+を現時点の最有力原因として断定してはいけない。
+
+今回の実際の出力がgeneric non-auth RemoteErrorなので、
+最終causeはline.IsAuthError分類ではない可能性が高い。
+
+
+==================================================
+16. Manager.do の重要仕様
+==================================================
+
+Read-only:
+
+Manager.Do
+    ↓
+Manager.do(... retry=true)
+
+Auth errorの場合、
+credential refresh後に1回retry可能。
+
+Mutation:
+
+Manager.Mutate
+    ↓
+Manager.do(... retry=false)
+
+mutationはreplayしない。
+
+コードコメント:
+
+A lost response may mean the server already accepted the mutation.
+
+これはBeeperLocalでも維持すべき重要な設計原則。
+
+送信系mutationのblind retryは禁止。
+
+
+==================================================
+17. callRPC実装
+==================================================
+
+callRPCWithBaseURLContext は:
+
+LINE Chrome gateway
+
+へHTTP POST。
+
+設定される主要header:
+
+Content-Type: application/json
+User-Agent
+x-line-chrome-version
+x-line-application
+x-lal
+x-line-access
+Cookie: lct=...
+x-hmac
+
+HMAC signatureも生成。
+
+その後:
+
+HTTPClient.Do(req)
+
+response body取得
+
+responseError(status, body)
+
+を実行。
+
+status != 200
+または
+IsAuthError(err)
+
+の場合はerror return。
+
+HTTP 200のnon-auth envelopeについては
+method-specific handlingへ渡す設計。
+
+
+==================================================
+18. 現在の原因仮説
+==================================================
+
+観測済み:
+
+Authentication          OK
+Session                 OK
+Identity                OK
+Chat list               OK
+Live event stream       OK
+
+TalkService:
+getRecentMessagesV2     FAILED
+sendMessage             FAILED
+
+したがって現在調査対象は:
+
+- TalkService RPC compatibility
+- LINEが返しているnon-auth TalkException
+- request/response envelope incompatibility
+- HMAC/header/method-specific protocol difference
+- その他non-auth server rejection
+
+など。
+
+まだ根本原因は確定していない。
+
+E2EEだけが原因とも断定しない。
+
+Token refreshだけが原因とも断定しない。
+
+
+==================================================
+19. upstream beeper/line
+==================================================
+
+ユーザーMacで

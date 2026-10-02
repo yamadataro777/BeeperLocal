@@ -1,0 +1,34 @@
+# === スコープ: トップレベルは app/ ・ docs/ ・ README.md ・ CLAUDE.md のみ ===
+# （archive/ ・ workstreams/ ・ business/ ・ BeeperLocal.app/ ・ .DS_Store などは除外）
+/*
+!/app/
+!/docs/
+!/README.md
+!/CLAUDE.md
+!/.gitignore
+
+# === app/.gitignore で未カバーのビルド成果物・バイナリ・キャッシュ ===
+app/releases/
+app/bin/
+app/desktop/signing-check/
+app/.go-cache/
+
+# === 全体で念のため除外（app/.gitignore を補完） ===
+.DS_Store
+**/node_modules/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/.desktop-venv/
+**/target/
+**/.go-cache/
+**/.cargo-cache/
+**/dist/
+*.sqlite*
+*.db
+*.db-*
+*.session
+*.session-journal
+.env
+.env.*
+*.log

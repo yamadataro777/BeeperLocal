@@ -1,0 +1,15 @@
+
+> beeperlocal-desktop@0.7.0 test
+> playwright test tests/onboarding.spec.ts
+
+[WebServer] (node:62456) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 4 tests using 1 worker
+
+  ✓  1 tests/onboarding.spec.ts:3:1 › new user sees QR onboarding and cancellation clears the challenge (916ms)
+  ✓  2 tests/onboarding.spec.ts:16:1 › phone PIN replaces QR and completion opens conversations (3.3s)
+  ✓  3 tests/onboarding.spec.ts:28:1 › failed login removes the QR and allows retry (2.3s)
+  ✓  4 tests/onboarding.spec.ts:36:1 › existing user explicitly chooses replacement and profile images render (1.3s)
+
+  4 passed (9.4s)

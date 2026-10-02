@@ -1,0 +1,23 @@
+{
+  "created_date": "2026-09-27",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "python": "3.13.5"
+  },
+  "unittest": {
+    "total": 126,
+    "passed": 125,
+    "skipped": 1,
+    "failed": 0,
+    "skipped_reason": "Telethon is not installed in this build environment; the user's Mac previously passed the installed Telethon constructor check."
+  },
+  "shell_syntax": "PASS",
+  "offline_demo": "PASS",
+  "phase0_live_gate_a": "CLOSED_ON_USER_MAC",
+  "phase0_volume_gate_b": "OPEN",
+  "phase1_encrypted_storage_local_tests": "PASS",
+  "phase1_live_sync": "NOT_RUN_YET",
+  "phase1_live_search": "NOT_RUN_YET",
+  "desktop_mvp": "NOT_IMPLEMENTED"
+}

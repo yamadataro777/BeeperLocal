@@ -1,0 +1,15 @@
+{
+  "version": "0.6.0",
+  "app": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal.app",
+  "previous_app_backup": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/app-backups/BeeperLocal-0.5.1-before-0.6.0-20260930-175928.app",
+  "source_and_placed_hashes_match": true,
+  "codesign_deep_strict": true,
+  "app_file_hashes": {
+    "Contents/Info.plist": "26c6055bc2bc53a6a99675daf11605d951c48c904d52aa1834d8e3f1ab46c814",
+    "Contents/_CodeSignature/CodeResources": "65cde85df630238d03546f378b469a16f491c9397101191c9530ad697a1f97a2",
+    "Contents/MacOS/line": "a669dc6ce63d296671448663918a381e0d0d12f29e4ad8af7c28949aebe859b5",
+    "Contents/MacOS/beeperlocal-core": "375ec64835ee62a01bdd6f68718225f6be9a85820d715903a696c54304a35099",
+    "Contents/MacOS/beeperlocal-desktop": "ec5231b7687ab3b4a6318d05010b28cc6a634da5624697ddcb6007ba6433003c",
+    "Contents/Resources/icon.icns": "f4aba4e3c4e67b82df7510d0f911e44f52ea3b09269bd9fc054f51d537542301"
+  }
+}

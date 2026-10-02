@@ -1,0 +1,16 @@
+{
+  "version": "0.8.0",
+  "staged_signature_verified": true,
+  "staged_executables_match": true,
+  "executables_sha256": {
+    "beeperlocal-ig": "f9834ce28761e7136ec3dc4642e2b2d6cbb755a17c95f7948769b45dc0d5a589",
+    "line": "715aee0390d0a57fcf8b668da8b6b10ceef6e6365e6f57563117ee7fa6a75b8e",
+    "beeperlocal-core": "d3fb77c363214bd725d04da067fa2b41553b6f95762d59f777f2f2fd3d9ef7fc",
+    "beeperlocal-desktop": "087cbe21258de21a2b958d85fff37d8bcfe26b395c36e905d552fda37933667c"
+  },
+  "app_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal.app",
+  "backup_app": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/app-backups/BeeperLocal-0.7.0-before-0.8.0-20261001-125337.app.backup",
+  "installed_signature_verified": true,
+  "installed_executables_match": true,
+  "installed_at": "2026-10-01T12:53:37.142775+09:00"
+}

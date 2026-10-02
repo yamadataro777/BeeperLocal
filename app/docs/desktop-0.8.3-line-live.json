@@ -1,0 +1,71 @@
+{
+  "version": "0.8.3",
+  "started_at": "2026-10-01T15:42:40.087635+09:00",
+  "method": "SIGTERM only app-owned LINE watch subprocess; seven interruptions, then allow recovery",
+  "target_interruptions": 7,
+  "interruptions": [
+    {
+      "pid": 47242,
+      "elapsed_seconds": 0.08
+    },
+    {
+      "pid": 47578,
+      "elapsed_seconds": 2.32
+    },
+    {
+      "pid": 47602,
+      "elapsed_seconds": 5.22
+    },
+    {
+      "pid": 47631,
+      "elapsed_seconds": 10.4
+    },
+    {
+      "pid": 48051,
+      "elapsed_seconds": 19.4
+    },
+    {
+      "pid": 48413,
+      "elapsed_seconds": 36.5
+    },
+    {
+      "pid": 48663,
+      "elapsed_seconds": 67.61
+    }
+  ],
+  "main_pid": 47007,
+  "actual_sends": 0,
+  "physical_sleep_test": false,
+  "physical_network_outage_test": false,
+  "phase": "passed",
+  "recovered_pid": 49192,
+  "recovered_after_last_interruption_seconds": 61.03,
+  "main_pid_unchanged": true,
+  "manual_reconnects": 0,
+  "receiver_stable_seconds": 20.51,
+  "ui_line_after_recovery": {
+    "conversations": 45,
+    "receiver_waiting": true,
+    "history_area_present": true,
+    "retry_error_cleared": true,
+    "history_limit": 100,
+    "selected_conversation_has_messages": false,
+    "note": "The selected LINE conversation showed an empty history; message retention for that conversation is not claimed by this test."
+  },
+  "slow_retry_explanation_ui_fixture_test": "passed",
+  "slow_retry_explanation_live_observed": false,
+  "actual_sends_scope": "No sends performed by this LINE recovery test",
+  "instagram_regression": {
+    "conversation_count": 1,
+    "receiver_waiting": true,
+    "prior_reply_visible": true,
+    "prior_offline_reply_visible": true,
+    "history_not_empty": true
+  },
+  "final_ui": {
+    "provider": "line",
+    "conversation_count": 45,
+    "receiver_waiting": true
+  },
+  "verified_at": "2026-10-01T15:48:01.131073+09:00"
+}

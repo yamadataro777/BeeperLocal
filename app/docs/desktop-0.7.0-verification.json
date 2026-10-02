@@ -1,0 +1,64 @@
+{
+  "version": "0.7.0",
+  "date": "2026-09-30",
+  "scope": [
+    "app QR onboarding",
+    "left conversation list recency",
+    "contact names including nonfriends",
+    "profile images"
+  ],
+  "python_tests": {
+    "passed": 230,
+    "log": "desktop-0.7.0-test-run.txt"
+  },
+  "ui_tests": {
+    "passed": 15,
+    "data": "synthetic",
+    "log": "desktop-0.7.0-ui-test-run.txt",
+    "additional_final_onboarding_passed": 4
+  },
+  "line_cli_tests": {
+    "race_tests": "passed",
+    "scope": "internal/... cmd/line pkg/line/... pkg/e2ee",
+    "independent_qr_decode": "passed",
+    "log": "desktop-0.7.0-line-test-run.txt"
+  },
+  "go_vet": "passed",
+  "shell_syntax": "passed",
+  "offline_demo": "passed_synthetic_not_live_evidence",
+  "package": "desktop-0.7.0-package-verification.json",
+  "live": {
+    "old_session_invalidated": true,
+    "keychain_available": true,
+    "saved_conversations_restored": 500,
+    "bundled_core_returns_login_required": true,
+    "real_qr_screen_observed": true,
+    "phone_approval": "native_QR_flow_followed_by_successful_reauthentication_and_provider_reads",
+    "catalog_and_avatar_check": "passed",
+    "new_messages_sent": 0,
+    "other_account_login_tested": false,
+    "current_conversation_count": 46,
+    "named_conversation_count": 46,
+    "dated_conversation_count": 46,
+    "profile_image_metadata_count": 46,
+    "order_descending": true,
+    "bundled_core_image_sample_loaded": 3,
+    "bundled_core_image_sample_attempted": 3,
+    "catalog_refresh_excludes_stale_cached_rows": true,
+    "bundled_core_report": "desktop-0.7.0-live-smoke.json",
+    "provider_report": "desktop-0.7.0-live-catalog.json",
+    "final_gui_conversation_count": 46,
+    "final_gui_connected": true,
+    "final_gui_profile_images_visible": 7,
+    "final_gui_login_dialog_closed": true
+  },
+  "limitations": [
+    "One selected DM is watched; the list refreshes on reconnect.",
+    "Profile downloads are memory cached only.",
+    "Apple Silicon development build with ad-hoc signing; no Developer ID notarization."
+  ],
+  "preview_correction": "A development fixture QR was visible in the in-app browser; the preview was closed after user feedback and the real native application opened. A development-only notice now explicitly says its QR cannot connect to LINE.",
+  "changes_are_not_instagram_merge": true,
+  "distribution_zip": "releases/BeeperLocal-0.7.0-AppleSilicon.zip",
+  "distribution_zip_sha256": "dd1cc358c624dbbf8361fe18791dbb480419d33bc7cc63ec8c83261d36f37c8b"
+}

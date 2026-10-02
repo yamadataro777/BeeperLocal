@@ -1,0 +1,18 @@
+{
+  "version": "0.8.1",
+  "status": "DELIVERY_REPLY_RESTART_SEARCH_VERIFIED_LIVE_WATCH_PENDING",
+  "updated_at": "2026-10-01T13:28:15.634789+09:00",
+  "real_send_authorized_by_user": true,
+  "real_send_button_clicked": 1,
+  "provider_acceptance_observed": true,
+  "sent_message_displayed": true,
+  "draft_cleared": true,
+  "watch_returned_to_waiting": true,
+  "recipient_delivery_confirmed": true,
+  "incoming_reply_observed": true,
+  "restart_search_verified": true,
+  "secrets_or_private_bodies_recorded": false,
+  "note": "User confirmed delivery and reply. Incoming reply displayed after app startup; this observation alone does not establish realtime watch delivery.",
+  "incoming_reply_live_watch_verified": false,
+  "restart_search_result_count": 1
+}

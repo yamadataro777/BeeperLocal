@@ -1,0 +1,32 @@
+
+> beeperlocal-desktop@0.8.0 test
+> playwright test
+
+[WebServer] (node:79045) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 19 tests using 1 worker
+
+(node:79048) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 tests/app.spec.ts:8:1 › opens a conversation, keeps Enter as newline and sends once with the button (2.0s)
+  ✓   2 tests/app.spec.ts:21:1 › drafts belong to their conversation and do not move to another recipient (1.0s)
+  ✓   3 tests/app.spec.ts:33:1 › searches saved messages and opens the correct conversation (1.5s)
+  ✓   4 tests/app.spec.ts:42:1 › ambiguous sends retain the draft and never silently retry (1.4s)
+  ✓   5 tests/app.spec.ts:51:1 › offline viewing stays available and sending is disabled (987ms)
+  ✓   6 tests/app.spec.ts:60:1 › narrow windows show one conversation pane at a time (672ms)
+  ✓   7 tests/instagram.spec.ts:8:1 › switches provider, keeps drafts scoped, and sends once to the IG conversation (1.9s)
+  ✓   8 tests/instagram.spec.ts:25:1 › IG search and settings stay separate from LINE and its MCP (2.5s)
+  ✓   9 tests/instagram.spec.ts:40:1 › IG byte limit and ambiguous response keep the draft (2.2s)
+  ✓  10 tests/instagram.spec.ts:53:1 › reopening remembers only the selected service and never stores the draft (2.3s)
+  ✓  11 tests/keychain.spec.ts:3:1 › explains an OS Keychain failure and retry does not move the connect button (897ms)
+  ✓  12 tests/keychain.spec.ts:20:1 › can connect after the Mac authentication state recovers (547ms)
+  ✓  13 tests/onboarding.spec.ts:3:1 › new user sees QR onboarding and cancellation clears the challenge (795ms)
+  ✓  14 tests/onboarding.spec.ts:16:1 › phone PIN replaces QR and completion opens conversations (3.2s)
+  ✓  15 tests/onboarding.spec.ts:28:1 › failed login removes the QR and allows retry (2.3s)
+  ✓  16 tests/onboarding.spec.ts:36:1 › existing user explicitly chooses replacement and profile images render (1.2s)
+  ✓  17 tests/settings.spec.ts:9:1 › MCP defaults to no conversations and no send, shows token once, revokes client (1.7s)
+  ✓  18 tests/settings.spec.ts:31:1 › storage deletion requires preview and confirmation and clears displayed content (1.4s)
+  ✓  19 tests/settings.spec.ts:44:1 › pausing storage disables sending while saved history remains (1.2s)
+
+  19 passed (32.1s)

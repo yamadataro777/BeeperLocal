@@ -1,0 +1,20 @@
+{
+  "display_information": {
+    "name": "BeeperLocal PoC",
+    "description": "Private local read-only messaging integration proof"
+  },
+  "oauth_config": {
+    "scopes": {
+      "user": [
+        "channels:read", "channels:history",
+        "groups:read", "groups:history",
+        "im:read", "im:history",
+        "mpim:read", "mpim:history"
+      ]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false
+  }
+}

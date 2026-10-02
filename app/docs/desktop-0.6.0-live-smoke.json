@@ -1,0 +1,14 @@
+{
+  "packaged_core_started": true,
+  "connection": "connected",
+  "local_conversations_before": 500,
+  "live_conversations": 500,
+  "selected_conversation_present": true,
+  "real_send_executed": false,
+  "local_messages": 1,
+  "recovery_receipt_present": true,
+  "history_bounded": true,
+  "live_saved_text_found_locally": true,
+  "watch_process_started": false,
+  "stopped_cleanly": true
+}

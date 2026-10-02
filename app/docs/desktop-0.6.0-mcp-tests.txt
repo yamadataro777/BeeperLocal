@@ -1,0 +1,26 @@
+test_chunked_body_limit_and_unexpected_server_error_are_sanitized (tests.test_mcp_http.HTTPTests.test_chunked_body_limit_and_unexpected_server_error_are_sanitized) ... ok
+test_http_auth_host_origin_proxy_query_and_body_boundaries (tests.test_mcp_http.HTTPTests.test_http_auth_host_origin_proxy_query_and_body_boundaries) ... ok
+test_modern_and_legacy_sdk_handshake_tools_and_scopes (tests.test_mcp_http.HTTPTests.test_modern_and_legacy_sdk_handshake_tools_and_scopes) ... ok
+test_port_in_use_fails_closed_without_stopping_core (tests.test_mcp_http.HTTPTests.test_port_in_use_fails_closed_without_stopping_core) ... ok
+test_revocation_and_restart_reject_old_token_immediately (tests.test_mcp_http.HTTPTests.test_revocation_and_restart_reject_old_token_immediately) ... ok
+test_default_disabled_and_scoped_reads_no_other_account_or_conversation (tests.test_mcp_controls.AccessTests.test_default_disabled_and_scoped_reads_no_other_account_or_conversation) ... ok
+test_grants_encrypted_persisted_and_revocation_survives_restart (tests.test_mcp_controls.AccessTests.test_grants_encrypted_persisted_and_revocation_survives_restart) ... ok
+test_invalid_token_read_only_and_send_only_permissions (tests.test_mcp_controls.AccessTests.test_invalid_token_read_only_and_send_only_permissions) ... ok
+test_other_target_send_does_not_change_gui_and_concurrent_duplicate_sends_once (tests.test_mcp_controls.AccessTests.test_other_target_send_does_not_change_gui_and_concurrent_duplicate_sends_once) ... ok
+test_revoke_disable_pause_or_stop_during_auth_prevents_issuance (tests.test_mcp_controls.AccessTests.test_revoke_disable_pause_or_stop_during_auth_prevents_issuance) ... ok
+test_tampered_grants_and_settings_fail_closed (tests.test_mcp_controls.AccessTests.test_tampered_grants_and_settings_fail_closed) ... ok
+test_unknown_request_not_replayed_after_restart (tests.test_mcp_controls.AccessTests.test_unknown_request_not_replayed_after_restart) ... ok
+test_disconnect_recovers_gap_deduplicates_and_restarts (tests.test_mcp_controls.ReconnectTests.test_disconnect_recovers_gap_deduplicates_and_restarts) ... ok
+test_eof_exhaustion_is_bounded_and_stops_recovery (tests.test_mcp_controls.ReconnectTests.test_eof_exhaustion_is_bounded_and_stops_recovery) ... ok
+test_fatal_decryption_error_does_not_retry (tests.test_mcp_controls.ReconnectTests.test_fatal_decryption_error_does_not_retry) ... ok
+test_pausing_during_fetch_discards_network_result (tests.test_mcp_controls.ReconnectTests.test_pausing_during_fetch_discards_network_result) ... ok
+test_delete_expiry_stale_counts_and_missing_confirmation_do_not_delete (tests.test_mcp_controls.StorageControlTests.test_delete_expiry_stale_counts_and_missing_confirmation_do_not_delete) ... ok
+test_delete_only_current_line_account_revokes_grants_and_prevents_replay (tests.test_mcp_controls.StorageControlTests.test_delete_only_current_line_account_revokes_grants_and_prevents_replay) ... ok
+test_delete_transaction_failure_preserves_content_and_grants (tests.test_mcp_controls.StorageControlTests.test_delete_transaction_failure_preserves_content_and_grants) ... ok
+test_deletion_is_not_limited_by_search_scan_window (tests.test_mcp_controls.StorageControlTests.test_deletion_is_not_limited_by_search_scan_window) ... ok
+test_pause_survives_restart_and_allows_saved_reads (tests.test_mcp_controls.StorageControlTests.test_pause_survives_restart_and_allows_saved_reads) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 3.039s
+
+OK

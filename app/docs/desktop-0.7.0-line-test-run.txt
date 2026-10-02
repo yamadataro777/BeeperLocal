@@ -1,0 +1,11 @@
+ok  	github.com/kongesque/line-cli/internal/cli	(cached)
+ok  	github.com/kongesque/line-cli/internal/events	(cached)
+ok  	github.com/kongesque/line-cli/internal/input	(cached)
+ok  	github.com/kongesque/line-cli/internal/messaging	(cached)
+ok  	github.com/kongesque/line-cli/internal/session	1.911s
+ok  	github.com/kongesque/line-cli/internal/update	(cached)
+ok  	github.com/kongesque/line-cli/cmd/line	6.143s
+ok  	github.com/kongesque/line-cli/pkg/line	(cached)
+?   	github.com/kongesque/line-cli/pkg/line/password	[no test files]
+?   	github.com/kongesque/line-cli/pkg/line/secret	[no test files]
+ok  	github.com/kongesque/line-cli/pkg/e2ee	(cached)

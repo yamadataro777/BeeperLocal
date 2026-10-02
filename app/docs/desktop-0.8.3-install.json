@@ -1,0 +1,15 @@
+{
+  "version": "0.8.3",
+  "installed_at": "2026-10-01T15:40:49.696557+09:00",
+  "backup_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/app-backups/BeeperLocal-0.8.2-before-0.8.3-20261001-154049.app",
+  "installed_path": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/BeeperLocal.app",
+  "sha256": {
+    "beeperlocal-ig": "8ca9b063210256b019c2ea62f59f45ec9ee545d078c19e7f81724269cb31dff5",
+    "line": "cc9afcbec3d27b17d1caaabca40b4e6717954062c034a5b9c7354578e4555629",
+    "beeperlocal-core": "2c39f1f679ecadb7409c118628afa127869eb56386defb8103bc91666a22e9c1",
+    "beeperlocal-desktop": "acb7299a00f88c84ad7e97303110ee926ace488e456469c7184822cf7ed8d7ad"
+  },
+  "signature_verified": true,
+  "installed_matches_release": true,
+  "previous_identity_preserved": true
+}

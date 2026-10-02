@@ -1,0 +1,36 @@
+
+> beeperlocal-desktop@0.8.3 test
+> playwright test
+
+[WebServer] (node:41414) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 25 tests using 1 worker
+
+  ✓   1 tests/app.spec.ts:8:1 › opens a conversation, keeps Enter as newline and sends once with the button (1.2s)
+  ✓   2 tests/app.spec.ts:21:1 › drafts belong to their conversation and do not move to another recipient (1.0s)
+  ✓   3 tests/app.spec.ts:33:1 › searches saved messages and opens the correct conversation (1.5s)
+  ✓   4 tests/app.spec.ts:42:1 › ambiguous sends retain the draft and never silently retry (1.4s)
+  ✓   5 tests/app.spec.ts:51:1 › offline viewing stays available and sending is disabled (989ms)
+  ✓   6 tests/app.spec.ts:60:1 › narrow windows show one conversation pane at a time (1.2s)
+  ✓   7 tests/instagram.spec.ts:8:1 › switches provider, keeps drafts scoped, and sends once to the IG conversation (2.0s)
+  ✓   8 tests/instagram.spec.ts:25:1 › IG search and settings stay separate from LINE and its MCP (2.6s)
+  ✓   9 tests/instagram.spec.ts:40:1 › IG byte limit and ambiguous response keep the draft (2.2s)
+  ✓  10 tests/instagram.spec.ts:53:1 › reopening remembers only the selected service and never stores the draft (2.8s)
+  ✓  11 tests/instagram.spec.ts:64:1 › a recovered receiver clears its connection error without leaking it to LINE (1.6s)
+  ✓  12 tests/instagram.spec.ts:87:1 › receiver recovery never hides an unknown send or its draft (1.4s)
+  ✓  13 tests/keychain.spec.ts:3:1 › explains an OS Keychain failure and retry does not move the connect button (1.1s)
+  ✓  14 tests/keychain.spec.ts:20:1 › can connect after the Mac authentication state recovers (767ms)
+  ✓  15 tests/line-recovery.spec.ts:3:1 › LINE slow retries explain automatic recovery, preserve drafts and clear on recovery (591ms)
+  ✓  16 tests/onboarding.spec.ts:3:1 › new user sees QR onboarding and cancellation clears the challenge (783ms)
+  ✓  17 tests/onboarding.spec.ts:16:1 › phone PIN replaces QR and completion opens conversations (3.3s)
+  ✓  18 tests/onboarding.spec.ts:28:1 › failed login removes the QR and allows retry (2.4s)
+  ✓  19 tests/onboarding.spec.ts:36:1 › existing user explicitly chooses replacement and profile images render (812ms)
+  ✓  20 tests/settings.spec.ts:9:1 › MCP defaults to no conversations and no send, shows token once, revokes client (2.3s)
+  ✓  21 tests/settings.spec.ts:31:1 › storage deletion requires preview and confirmation and clears displayed content (1.4s)
+  ✓  22 tests/settings.spec.ts:44:1 › pausing storage disables sending while saved history remains (1.0s)
+  ✓  23 tests/slack.spec.ts:10:1 › Slack user conversations, polling scope, send and draft isolation (2.2s)
+  ✓  24 tests/slack.spec.ts:27:1 › Slack MCP settings and grants are independent of LINE (1.8s)
+  ✓  25 tests/slack.spec.ts:46:1 › Slack unknown send retains draft and input has a 4000 character limit (1.2s)
+
+  25 passed (41.8s)

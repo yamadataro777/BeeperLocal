@@ -1,0 +1,10 @@
+test_chunked_body_limit_and_unexpected_server_error_are_sanitized (tests.test_mcp_http.HTTPTests.test_chunked_body_limit_and_unexpected_server_error_are_sanitized) ... ok
+test_http_auth_host_origin_proxy_query_and_body_boundaries (tests.test_mcp_http.HTTPTests.test_http_auth_host_origin_proxy_query_and_body_boundaries) ... ok
+test_modern_and_legacy_sdk_handshake_tools_and_scopes (tests.test_mcp_http.HTTPTests.test_modern_and_legacy_sdk_handshake_tools_and_scopes) ... ok
+test_port_in_use_fails_closed_without_stopping_core (tests.test_mcp_http.HTTPTests.test_port_in_use_fails_closed_without_stopping_core) ... ok
+test_revocation_and_restart_reject_old_token_immediately (tests.test_mcp_http.HTTPTests.test_revocation_and_restart_reject_old_token_immediately) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 1.465s
+
+OK

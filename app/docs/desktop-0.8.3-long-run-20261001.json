@@ -1,0 +1,43 @@
+{
+  "version": "0.8.3",
+  "result": "INTERRUPTED_INCONCLUSIVE",
+  "requested_duration_seconds": 3600,
+  "started_at": "2026-10-01T15:54:55.577830+09:00",
+  "app_last_seen_at": "2026-10-01T16:01:27.303607+09:00",
+  "app_first_absent_at": "2026-10-01T16:01:42.374990+09:00",
+  "observation_elapsed_seconds": 406.8,
+  "app_present_sample_span_seconds": 391.73,
+  "sample_count": 28,
+  "app_present_samples": 27,
+  "line_present_samples": 27,
+  "line_receiver_pid_changes_before_stop": 0,
+  "observation_gaps": 0,
+  "max_observation_gap_seconds": 15.09,
+  "app_exit_cause": "not determined",
+  "current_app_running": false,
+  "matching_user_diagnostic_reports_today": 0,
+  "observer_exited": true,
+  "temporary_idle_sleep_helper_exited": true,
+  "app_memory_mib": {
+    "initial": 186.34,
+    "last_alive": 123.23,
+    "max_alive": 186.34,
+    "min_alive": 123.23
+  },
+  "max_app_cpu_percent": 23.9,
+  "final_live_ui_verified": false,
+  "reason_final_ui_not_checked": "App was no longer running; it was not relaunched",
+  "test_sends": 0,
+  "test_forced_interruptions": 0,
+  "automatic_followup": "PAUSED",
+  "limitations": [
+    "Runtime exit occurred between the last present sample and the first absent sample; exact exit time is unknown.",
+    "No matching user crash report does not establish whether termination was intentional.",
+    "Process presence alone does not prove message delivery or lack of a blocked network read.",
+    "This run did not establish one-hour or 24-hour stability.",
+    "Memory covers only bundled processes, excluding separate WebKit helpers."
+  ],
+  "source_run_directory": "/Users/haruotsuchiya/Documents/ChatGPT/BeeperLocal　検証/line-recovery-work/long-run/20261001-155455",
+  "reviewed_at": "2026-10-01T16:15:12.184988+09:00",
+  "automation_id": "beeperlocal-1"
+}

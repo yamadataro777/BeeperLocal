@@ -28,6 +28,7 @@ func (a *App) messageCommand(command string, args []string) error {
 	limit := 20
 	var text string
 	var stdin bool
+	var imageStdin bool
 	var replyTo string
 	var filePath string
 	var attachment *messaging.Attachment
@@ -37,6 +38,7 @@ func (a *App) messageCommand(command string, args []string) error {
 	} else {
 		fs.StringVar(&text, "text", "", "message text")
 		fs.BoolVar(&stdin, "stdin", false, "read UTF-8 message text from stdin")
+		fs.BoolVar(&imageStdin, "image-stdin", false, "read a PNG/JPEG image from a private pipe (up to 4 MiB)")
 		fs.StringVar(&filePath, "file", "", "send a generic file attachment (up to 20 MiB)")
 		fs.StringVar(&replyTo, "reply-to", "", "reply to this message ID")
 	}
@@ -51,7 +53,7 @@ func (a *App) messageCommand(command string, args []string) error {
 	} else if fs.NArg() != 0 {
 		return errors.New("unexpected arguments; place options after the chat name or ID")
 	}
-	guided := a.Interactive && !*jsonOutput && !stdin
+	guided := a.Interactive && !*jsonOutput && !stdin && !imageStdin
 	if chat != "" || !guided {
 		if err := validateSelector(chat); err != nil {
 			return err
@@ -77,7 +79,7 @@ func (a *App) messageCommand(command string, args []string) error {
 			}
 		})
 		sources := 0
-		for _, enabled := range []bool{hasText, stdin, hasFile} {
+		for _, enabled := range []bool{hasText, stdin, hasFile, imageStdin} {
 			if enabled {
 				sources++
 			}
@@ -86,6 +88,23 @@ func (a *App) messageCommand(command string, args []string) error {
 			return errors.New("provide exactly one of --text TEXT, --stdin, or --file PATH")
 		}
 		promptText = sources == 0 && guided
+		if imageStdin {
+			if a.In == nil || a.Interactive {
+				return errors.New("image stdin requires a pipe")
+			}
+			data, err := io.ReadAll(io.LimitReader(a.In, (4<<20)+1))
+			if err != nil {
+				return errors.New("could not read image")
+			}
+			name := "image.jpg"
+			if len(data) >= 8 && string(data[:8]) == "\x89PNG\r\n\x1a\n" {
+				name = "image.png"
+			}
+			attachment = &messaging.Attachment{Name: name, Data: data, Image: true}
+			if err := attachment.Validate(); err != nil {
+				return err
+			}
+		}
 		if hasFile {
 			file, err := os.Open(filePath)
 			if err != nil {

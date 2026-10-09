@@ -12,9 +12,37 @@ from .models import SUPPORTED_PROVIDERS
 
 SERVICE = "BeeperLocalPoC.v1"
 LOCAL_DB_KEY_ACCOUNT = "local-db-key-v1"
+_desktop_session = None
+
+
+def start_desktop_keychain_session():
+    global _desktop_session
+    if _desktop_session is not None:
+        return
+    from .keychain_session import KeychainSession
+    _desktop_session = KeychainSession(_backend())
+
+
+def end_desktop_keychain_session():
+    global _desktop_session
+    if _desktop_session is not None:
+        _desktop_session.clear()
+    _desktop_session = None
+
+
+def retry_desktop_keychain(provider):
+    if _desktop_session is None:
+        return
+    services = {'line': SERVICE, 'slack': SERVICE, 'instagram': 'BeeperLocalInstagramIntegration.v1',
+                'x': 'BeeperLocalXIntegration.v1', 'messenger': 'BeeperLocalMessengerIntegration.v1'}
+    _desktop_session.retry(services[provider], provider)
+    if provider == 'messenger':
+        _desktop_session.retry('local.beeperlocal.messenger-verification.v1', 'bounded-receive-state')
 
 
 def _backend():
+    if _desktop_session is not None:
+        return _desktop_session
     if sys.platform != "darwin":
         raise AppError("UNSUPPORTED_PLATFORM")
     try:
@@ -60,7 +88,7 @@ class MacKeychain:
 
     def save(self, provider: str, data: dict[str, Any]) -> None:
         self._check(provider)
-        raw = json.dumps({**data, "schema_version": 1}, ensure_ascii=False, separators=(",", ":"))
+        raw = json.dumps({**data, "schema_version": 1}, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         try:
             self.backend.set_password(self.service, provider, raw)
             if self.backend.get_password(self.service, provider) != raw:

@@ -5,3 +5,4 @@ keyring==25.7.0
 
 # AES-256-GCM authenticated encryption for local message payloads.
 cryptography==46.0.4
+truststore==0.10.4

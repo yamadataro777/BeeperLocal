@@ -29,3 +29,10 @@ desktop/playwright-report/
 
 .research/
 .go-cache/
+
+.swift-cache/
+bin/beeperlocal-x
+bin/beeperlocal-x-login
+.build-python/
+.release-venv/
+.uv-cache/

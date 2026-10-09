@@ -33,7 +33,7 @@ func (c *Client) SendMessage(ctx context.Context, req *slidetypes.SendTextReques
 }
 
 func (c *Client) SendMedia(ctx context.Context, req *slidetypes.SendMediaRequest) (*slidetypes.SendMediaResponse, error) {
-	return makeGraphQLRequest[*slidetypes.SendMediaResponse](ctx, c, "IGDirectMediaSendMutation", req, true)
+	return makeGraphQLRequest[*slidetypes.SendMediaResponse](ctx, c, "IGDirectMediaSendMutation", req, false) // BeeperLocal: never replay a send.
 }
 
 func (c *Client) EditMessage(ctx context.Context, req *slidetypes.EditMessageRequest) (*slidetypes.EditMessageResponse, error) {

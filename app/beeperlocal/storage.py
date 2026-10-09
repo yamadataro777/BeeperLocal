@@ -75,6 +75,8 @@ def _payload(message: UnifiedMessage) -> bytes:
         "edited_at": iso(message.edited_at) if message.edited_at else None,
         "reply_to_message_id": message.reply_to_message_id,
         "direction": message.direction,
+        "media": message.media,
+        "attachments": message.attachments,
     }
     return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
@@ -96,6 +98,8 @@ def _message_from_payload(raw: bytes) -> UnifiedMessage:
         edited_at=_parse_iso(value.get("edited_at")),
         reply_to_message_id=value.get("reply_to_message_id"),
         direction=value.get("direction", "unknown"),
+        media=value.get("media"),
+        attachments=value.get("attachments", []),
     )
 
 
@@ -122,11 +126,6 @@ class EncryptedMessageStore:
         try:
             conn = sqlite3.connect(self.path, timeout=5.0)
             conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA journal_mode=DELETE")
-            conn.execute("PRAGMA synchronous=FULL")
-            conn.execute("PRAGMA secure_delete=ON")
-            conn.execute("PRAGMA temp_store=MEMORY")
-            conn.execute("PRAGMA foreign_keys=ON")
             conn.execute("PRAGMA trusted_schema=OFF")
             if self.path.exists():
                 self.path.chmod(0o600)
@@ -136,53 +135,54 @@ class EncryptedMessageStore:
 
     def _initialize(self) -> None:
         try:
-            self.conn.executescript(
-                """
-                CREATE TABLE IF NOT EXISTS meta (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                ) WITHOUT ROWID;
-                CREATE TABLE IF NOT EXISTS messages (
-                    id TEXT PRIMARY KEY,
-                    provider TEXT NOT NULL,
-                    sent_at_us INTEGER NOT NULL,
-                    ciphertext BLOB NOT NULL
-                ) WITHOUT ROWID;
-                CREATE INDEX IF NOT EXISTS messages_provider_time
-                    ON messages(provider, sent_at_us DESC);
-                """
-            )
-            self.conn.execute(f"PRAGMA user_version={DB_SCHEMA_VERSION}")
-            fingerprint = _key_fingerprint(self.key)
-            row = self.conn.execute("SELECT value FROM meta WHERE key='key_fingerprint'").fetchone()
-            if row is None:
-                self.conn.execute("INSERT INTO meta(key,value) VALUES('key_fingerprint',?)", (fingerprint,))
-                self.conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES('schema_version',?)", (str(DB_SCHEMA_VERSION),))
-                self.conn.commit()
-            elif row["value"] != fingerprint:
-                raise AppError("LOCAL_DB_KEY_MISMATCH")
-            schema = self.conn.execute("SELECT value FROM meta WHERE key='schema_version'").fetchone()
-            if schema is None or schema["value"] != str(DB_SCHEMA_VERSION):
+            tables = {r[0] for r in self.conn.execute(
+                "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'")}
+            if tables:
+                self._validate_schema(tables)
+            elif self.conn.execute("PRAGMA user_version").fetchone()[0] != 0:
                 raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
-            # Additive catalog: existing v1 message rows and encryption stay intact.
-            # Only initialize after verifying the existing key and schema.
-            with self.conn:
-                self.conn.execute("""CREATE TABLE IF NOT EXISTS conversations (
-                    id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
-                ) WITHOUT ROWID""")
-                self.conn.execute("""CREATE TABLE IF NOT EXISTS sync_receipts (
-                    id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
-                ) WITHOUT ROWID""")
-                self.conn.execute("""CREATE TABLE IF NOT EXISTS outgoing_requests (
-                    id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
-                ) WITHOUT ROWID""")
-                self.conn.execute("""CREATE TABLE IF NOT EXISTS private_settings (
-                    id TEXT PRIMARY KEY, ciphertext BLOB NOT NULL
-                ) WITHOUT ROWID""")
-                # Body-free tombstones keep a cleared request from being sent again.
-                self.conn.execute("""CREATE TABLE IF NOT EXISTS retired_requests (
-                    id TEXT PRIMARY KEY
-                ) WITHOUT ROWID""")
+            # Validate an existing DB before changing its journal mode or any content.
+            self.conn.execute("PRAGMA journal_mode=DELETE")
+            self.conn.execute("PRAGMA synchronous=FULL")
+            self.conn.execute("PRAGMA secure_delete=ON")
+            self.conn.execute("PRAGMA temp_store=MEMORY")
+            self.conn.execute("PRAGMA foreign_keys=ON")
+            if not tables:
+                self.conn.executescript("""
+                    BEGIN;
+                    CREATE TABLE meta (
+                        key TEXT PRIMARY KEY, value TEXT NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE TABLE messages (
+                        id TEXT PRIMARY KEY, provider TEXT NOT NULL,
+                        sent_at_us INTEGER NOT NULL, ciphertext BLOB NOT NULL,
+                        scope_id TEXT NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE INDEX messages_provider_time ON messages(provider, sent_at_us DESC);
+                    CREATE INDEX messages_scope_time ON messages(scope_id, sent_at_us DESC, id DESC);
+                    CREATE TABLE conversations (
+                        id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE TABLE sync_receipts (
+                        id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE TABLE outgoing_requests (
+                        id TEXT PRIMARY KEY, provider TEXT NOT NULL, ciphertext BLOB NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE TABLE private_settings (
+                        id TEXT PRIMARY KEY, ciphertext BLOB NOT NULL
+                    ) WITHOUT ROWID;
+                    CREATE TABLE retired_requests (id TEXT PRIMARY KEY) WITHOUT ROWID;
+                    CREATE TABLE message_tombstones (
+                        id TEXT PRIMARY KEY, provider TEXT NOT NULL, scope_id TEXT NOT NULL
+                    ) WITHOUT ROWID;
+                """)
+                self.conn.executemany("INSERT INTO meta(key,value) VALUES(?,?)", [
+                    ("key_fingerprint", _key_fingerprint(self.key)),
+                    ("schema_version", str(DB_SCHEMA_VERSION)),
+                ])
+                self.conn.execute(f"PRAGMA user_version={DB_SCHEMA_VERSION}")
+                self.conn.commit()
             if self.path.exists():
                 self.path.chmod(0o600)
         except AppError:
@@ -194,6 +194,31 @@ class EncryptedMessageStore:
         except (OSError, sqlite3.Error):
             self.close()
             raise AppError("LOCAL_DB_UNAVAILABLE") from None
+
+    def _validate_schema(self, tables) -> None:
+        columns = {
+            "meta": {"key", "value"},
+            "messages": {"id", "provider", "sent_at_us", "ciphertext", "scope_id"},
+            "conversations": {"id", "provider", "ciphertext"},
+            "sync_receipts": {"id", "provider", "ciphertext"},
+            "outgoing_requests": {"id", "provider", "ciphertext"},
+            "private_settings": {"id", "ciphertext"},
+            "retired_requests": {"id"},
+            "message_tombstones": {"id", "provider", "scope_id"},
+        }
+        if tables != columns.keys() or self.conn.execute("PRAGMA user_version").fetchone()[0] != DB_SCHEMA_VERSION:
+            raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
+        for table, expected in columns.items():
+            actual = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            if actual != expected:
+                raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
+        metadata = dict(self.conn.execute("SELECT key,value FROM meta"))
+        if metadata.get("schema_version") != str(DB_SCHEMA_VERSION) or "key_fingerprint" not in metadata:
+            raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
+        if metadata["key_fingerprint"] != _key_fingerprint(self.key):
+            raise AppError("LOCAL_DB_KEY_MISMATCH")
+        if self.conn.execute("SELECT 1 FROM messages WHERE scope_id IS NULL LIMIT 1").fetchone():
+            raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
 
     def close(self) -> None:
         try:
@@ -225,6 +250,14 @@ class EncryptedMessageStore:
             return message
         except (InvalidTag, ValueError, TypeError, KeyError, UnicodeError, json.JSONDecodeError):
             raise AppError("LOCAL_DB_CORRUPT") from None
+
+    def get_message(self, message_id):
+        """Internal exact lookup; callers must enforce provider/account/conversation scope."""
+        try:
+            row = self.conn.execute("SELECT ciphertext FROM messages WHERE id=?", (message_id,)).fetchone()
+            return self._decrypt(message_id, row[0]) if row else None
+        except sqlite3.Error:
+            raise AppError("LOCAL_DB_UNAVAILABLE") from None
 
     def _conversation_rows(self, conversations):
         rows = []
@@ -261,12 +294,27 @@ class EncryptedMessageStore:
         except (sqlite3.Error, InvalidTag, ValueError, TypeError, KeyError, UnicodeError):
             raise AppError("LOCAL_DB_CORRUPT") from None
 
-    def list_messages(self, provider, account_id, conversation_id, *, limit=50):
+    @staticmethod
+    def _message_scope(message):
+        return sha256(json.dumps([message.provider, message.account_id, message.conversation_id],
+                                 separators=(",", ":")).encode()).hexdigest()
+
+    def list_messages(self, provider, account_id, conversation_id, *, limit=50, before=None):
         if not 1 <= limit <= 100:
             raise AppError("INVALID_INPUT")
         try:
-            rows = self.conn.execute("SELECT id,ciphertext FROM messages WHERE provider=? ORDER BY sent_at_us DESC,id DESC LIMIT ?",
-                                     (provider, MAX_SEARCH_SCAN))
+            scope = sha256(json.dumps([provider, account_id, conversation_id], separators=(",", ":")).encode()).hexdigest()
+            boundary = ""
+            params = [scope]
+            if before is not None:
+                anchor = self.get_message(before)
+                if anchor is None or (anchor.provider, anchor.account_id, anchor.conversation_id) != (provider, account_id, conversation_id):
+                    raise AppError("INVALID_INPUT")
+                boundary = " AND (sent_at_us<? OR (sent_at_us=? AND id<?))"
+                stamp = _sent_at_micros(anchor.sent_at)
+                params.extend([stamp, stamp, before])
+            rows = self.conn.execute("SELECT id,ciphertext FROM messages WHERE scope_id=?" + boundary +
+                                     " ORDER BY sent_at_us DESC,id DESC LIMIT ?", (*params, limit))
             messages = []
             for row in rows:
                 message = self._decrypt(row["id"], row["ciphertext"])
@@ -274,7 +322,7 @@ class EncryptedMessageStore:
                     messages.append(message)
                     if len(messages) >= limit:
                         break
-            return sorted(messages, key=lambda m: m.sort_key)
+            return sorted(messages, key=lambda m: (m.sent_at, m.id))
         except sqlite3.Error:
             raise AppError("LOCAL_DB_CORRUPT") from None
 
@@ -395,6 +443,26 @@ class EncryptedMessageStore:
         except sqlite3.Error:
             raise AppError("LOCAL_DB_UNAVAILABLE") from None
 
+    @staticmethod
+    def _profile_index(provider, account):
+        return 'profile-index.v1.' + sha256(json.dumps([provider, account], separators=(',', ':')).encode()).hexdigest()
+
+    def profile_cache_put(self, provider, account, name, value):
+        """Bounded encrypted raster cache, independently scoped to each account."""
+        index = self._profile_index(provider, account)
+        keys = self.private_get(index, [])
+        if not isinstance(keys, list) or len(keys) > 128 or any(not isinstance(k, str) for k in keys):
+            raise AppError('LOCAL_DB_CORRUPT')
+        keys = [key for key in keys if key != name] + [name]
+        try:
+            with self.conn:
+                self._private_put(name, value)
+                for key in keys[:-128]:
+                    self.conn.execute('DELETE FROM private_settings WHERE id=?', (self._private_key(key),))
+                self._private_put(index, keys[-128:])
+        except sqlite3.Error:
+            raise AppError('LOCAL_DB_UNAVAILABLE') from None
+
     def request_retired(self, request_id: str) -> bool:
         try:
             identity = request_key(request_id)
@@ -404,37 +472,47 @@ class EncryptedMessageStore:
         except sqlite3.Error:
             raise AppError("LOCAL_DB_CORRUPT") from None
 
-    def _line_data_ids(self, account_id):
+    def _provider_data_ids(self, provider, account_id):
         """Deletion is account-scoped and must not stop at the search scan limit."""
         try:
             messages = [row["id"] for row in self.conn.execute(
-                "SELECT id,ciphertext FROM messages WHERE provider='line'")
+                "SELECT id,ciphertext FROM messages WHERE provider=?", (provider,))
                 if self._decrypt(row["id"], row["ciphertext"]).account_id == account_id]
-            conversations = [r.id for r in self.list_conversations(provider="line", account_id=account_id)]
+            conversations = [r.id for r in self.list_conversations(provider=provider, account_id=account_id)]
             outgoing = [row["id"] for row in self.conn.execute(
-                "SELECT * FROM outgoing_requests WHERE provider='line'")
+                "SELECT * FROM outgoing_requests WHERE provider=?", (provider,))
                 if self._decrypt_outgoing(row).account_id == account_id]
             # Receipts normally have a catalog row; decode all to also remove orphaned receipts.
             receipts = []
-            for row in self.conn.execute("SELECT id,ciphertext FROM sync_receipts WHERE provider='line'"):
+            for row in self.conn.execute("SELECT id,ciphertext FROM sync_receipts WHERE provider=?", (provider,)):
                 blob = row["ciphertext"]
                 aad = ("BeeperLocalPoC/sync-receipt/v1/" + row["id"]).encode()
                 value = json.loads(self.aead.decrypt(blob[:12], blob[12:], aad))
                 value["completed_at"] = _parse_iso(value["completed_at"])
                 receipt = HistorySyncReceipt(**value)
-                if receipt.id != row["id"] or receipt.provider != "line":
+                if receipt.id != row["id"] or receipt.provider != provider:
                     raise ValueError()
                 if receipt.account_id == account_id:
                     receipts.append(row["id"])
             return {"messages": messages, "conversations": conversations,
-                    "sync_receipts": receipts, "outgoing_requests": outgoing}
+                    "sync_receipts": receipts, "outgoing_requests": outgoing,
+                    "message_tombstones": [r["id"] for r in self.conn.execute(
+                        "SELECT id,scope_id FROM message_tombstones WHERE provider=?", (provider,))
+                        if r["scope_id"] in set(conversations)]}
         except (sqlite3.Error, InvalidTag, ValueError, TypeError, KeyError, UnicodeError):
             raise AppError("LOCAL_DB_CORRUPT") from None
 
     def line_data_counts(self, account_id):
-        return {name: len(ids) for name, ids in self._line_data_ids(account_id).items()}
+        return self.provider_data_counts("line", account_id)
+
+    def provider_data_counts(self, provider, account_id):
+        return {name: len(ids) for name, ids in self._provider_data_ids(provider, account_id).items()}
 
     def clear_line_data(self, account_id, *, private_updates, expected_counts=None):
+        return self.clear_provider_data("line", account_id, private_updates=private_updates,
+                                        expected_counts=expected_counts)
+
+    def clear_provider_data(self, provider, account_id, *, private_updates, expected_counts=None):
         """Atomically erase this account's content and revoke its grants.
 
         Shared session credentials, database key, and other providers/accounts stay intact.
@@ -443,7 +521,7 @@ class EncryptedMessageStore:
         try:
             with self.conn:
                 self.conn.execute("BEGIN IMMEDIATE")
-                identities = self._line_data_ids(account_id)
+                identities = self._provider_data_ids(provider, account_id)
                 if expected_counts is not None and {k: len(v) for k, v in identities.items()} != expected_counts:
                     raise AppError("DELETE_CONFIRMATION_EXPIRED")
                 self.conn.executemany("INSERT OR IGNORE INTO retired_requests(id) VALUES(?)",
@@ -451,18 +529,55 @@ class EncryptedMessageStore:
                 for table, ids in identities.items():
                     # Table names come solely from the fixed dictionary above.
                     self.conn.executemany(f"DELETE FROM {table} WHERE id=?", [(i,) for i in ids])
+                for identity in identities['messages']:
+                    self.conn.execute('DELETE FROM private_settings WHERE id=?', (self._private_key('image.v1.' + identity),))
+                profile_index = self._profile_index(provider, account_id)
+                for key in self.private_get(profile_index, []) + [profile_index]:
+                    self.conn.execute('DELETE FROM private_settings WHERE id=?', (self._private_key(key),))
+                # Per-conversation cursors/read state belong to deleted content.
+                # Device registration markers and credentials must survive.
+                for identity in identities["conversations"]:
+                    for prefix in ("sync.v1.", "read.v1.", "delete.v1.", "x.history.", "profile.v1."):
+                        self.conn.execute("DELETE FROM private_settings WHERE id=?",
+                                          (self._private_key(prefix + identity),))
                 for name, value in private_updates.items():
                     self._private_put(name, value)
             return {name: len(ids) for name, ids in identities.items()}
         except sqlite3.Error:
             raise AppError("LOCAL_DB_UNAVAILABLE") from None
 
-    def upsert(self, messages: Iterable[UnifiedMessage], *, conversations=(), sync_receipts=(), outgoing_requests=()) -> dict[str, int]:
-        values = list(messages)
+    def upsert(self, messages: Iterable[UnifiedMessage], *, conversations=(), sync_receipts=(), outgoing_requests=(),
+               private_updates=None, deletions=()) -> dict[str, int]:
+        # Deletions carry a verified conversation and the provider's original message ID.
+        deleted = list(deletions)
+        deletion_rows = [(sha256(json.dumps([r.provider, r.account_id, r.conversation.id, mid], separators=(",", ":")).encode()).hexdigest(),
+                          r.provider, r.id) for r, mid in deleted]
+        deleted_ids = {row[0] for row in deletion_rows}
+        values = [m for m in messages if m.id not in deleted_ids and not self.conn.execute(
+            "SELECT 1 FROM message_tombstones WHERE id=?", (m.id,)).fetchone()]
+        # Slack upload acknowledgements have a file id before their message ts
+        # becomes visible. Merge only the same author's file in the same chat.
+        provisional_ids = set()
+        private_updates = dict(private_updates or {})
+        for message in values:
+            if message.provider != 'slack' or message.direction != 'outgoing' or message.provider_message_id.startswith('file:'):
+                continue
+            for attachment in message.attachments:
+                fid = attachment.get('file_id')
+                if not fid:
+                    continue
+                from dataclasses import replace
+                identity = replace(message, provider_message_id='file:' + fid).id
+                prior = self.get_message(identity)
+                if prior is not None and prior.direction == 'outgoing' and prior.sender_id == message.sender_id:
+                    provisional_ids.add(identity)
+                    preview = self.private_get('image.v1.' + identity)
+                    if preview:
+                        private_updates.setdefault('image.v1.' + message.id, preview)
         conversation_values = list(conversations)
         receipts = list(sync_receipts)
         outgoing = list(outgoing_requests)
-        if not values and not conversation_values and not receipts and not outgoing:
+        if not values and not conversation_values and not receipts and not outgoing and not private_updates and not deleted:
             return {"processed": 0, "inserted": 0, "updated": 0}
         conversation_ids = {c.id for c in conversation_values}
         if (any(r.id not in conversation_ids for r in receipts)
@@ -478,20 +593,24 @@ class EncryptedMessageStore:
                 chunk = ids[start:start + 400]
                 marks = ",".join("?" for _ in chunk)
                 existing.update(r[0] for r in self.conn.execute(f"SELECT id FROM messages WHERE id IN ({marks})", chunk))
-            rows = [(m.id, m.provider, _sent_at_micros(m.sent_at), self._encrypt(m)) for m in values]
+            rows = [(m.id, m.provider, _sent_at_micros(m.sent_at), self._encrypt(m), self._message_scope(m)) for m in values]
             conversation_rows = self._conversation_rows(conversation_values)
             receipt_rows = self._sync_receipt_rows(receipts)
             outgoing_rows = self._outgoing_rows(outgoing)
             with self.conn:
+                for identity in provisional_ids:
+                    self.conn.execute('DELETE FROM messages WHERE id=?', (identity,))
+                    self.conn.execute('DELETE FROM private_settings WHERE id=?', (self._private_key('image.v1.' + identity),))
                 self.conn.executemany("""INSERT INTO conversations(id,provider,ciphertext) VALUES(?,?,?)
                     ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,ciphertext=excluded.ciphertext""", conversation_rows)
                 self.conn.executemany(
                     """
-                    INSERT INTO messages(id,provider,sent_at_us,ciphertext) VALUES(?,?,?,?)
+                    INSERT INTO messages(id,provider,sent_at_us,ciphertext,scope_id) VALUES(?,?,?,?,?)
                     ON CONFLICT(id) DO UPDATE SET
                         provider=excluded.provider,
                         sent_at_us=excluded.sent_at_us,
-                        ciphertext=excluded.ciphertext
+                        ciphertext=excluded.ciphertext,
+                        scope_id=excluded.scope_id
                     """,
                     rows,
                 )
@@ -501,6 +620,12 @@ class EncryptedMessageStore:
                 self.conn.executemany("""INSERT INTO outgoing_requests(id,provider,ciphertext) VALUES(?,?,?)
                     ON CONFLICT(id) DO UPDATE SET provider=excluded.provider,ciphertext=excluded.ciphertext""",
                                       outgoing_rows)
+                self.conn.executemany("INSERT OR IGNORE INTO message_tombstones(id,provider,scope_id) VALUES(?,?,?)", deletion_rows)
+                self.conn.executemany("DELETE FROM messages WHERE id=?", [(row[0],) for row in deletion_rows])
+                for row in deletion_rows:
+                    self.conn.execute('DELETE FROM private_settings WHERE id=?', (self._private_key('image.v1.' + row[0]),))
+                for name, value in (private_updates or {}).items():
+                    self._private_put(name, value)
             return {"processed": len(values), "inserted": len(values) - len(existing), "updated": len(existing)}
         except AppError:
             raise

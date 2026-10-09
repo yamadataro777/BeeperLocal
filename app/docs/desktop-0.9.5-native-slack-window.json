@@ -1,0 +1,7 @@
+{
+  "exit_code": 0,
+  "cancelled": true,
+  "authorization_code_returned": false,
+  "credentials_saved": false,
+  "token_exchange_performed": false
+}

@@ -76,10 +76,14 @@ class InstagramDesktopTests(unittest.IsolatedAsyncioTestCase):
         self.core = self.make_core()
 
     def make_core(self):
-        return InstagramDesktop(credentials=self.credentials,
+        core = InstagramDesktop(credentials=self.credentials,
             db_factory=lambda: EncryptedMessageStore(b'k' * 32, self.path),
             connector_factory=lambda credentials: InstagramConnector(credentials, adapter=self.adapter),
             emit=self.events.append)
+        # Preserve the original adapter event/recovery contract; account polling
+        # is exercised independently in test_desktop_sync.
+        core.supports_all_sync = lambda: False
+        return core
 
     async def asyncTearDown(self):
         await self.core.close()
@@ -113,16 +117,32 @@ class InstagramDesktopTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.02)
         self.assertEqual(self.core.db.total_count(), 2)
 
-    async def test_repeated_transient_failures_stop_at_retry_limit(self):
+    async def test_repeated_transient_failures_continue_slow_retry_and_recover(self):
         await self.connect()
         self.core.retry_delays = (.01, .02)
+        self.core.reconnect_interval = .05
         self.adapter.watch_failures = [AppError('IG_REQUEST_TIMEOUT'), AppError('IG_REQUEST_FAILED')]
         await self.adapter.queue.put(AppError('IG_REQUEST_FAILED'))
-        await self.until(lambda: self.core.error_code == 'SYNC_RETRY_EXHAUSTED')
-        self.assertEqual(self.core.receiving, 'error')
+        await self.until(lambda: self.core.error_code == 'IG_RECONNECT_WAITING')
+        self.assertEqual(self.core.receiving, 'reconnecting')
         self.assertEqual(self.adapter.requests.count('watch'), 3)
         self.assertEqual(self.adapter.live_watchers, 0)
         self.assertEqual(self.adapter.sends, 0)
+        await self.until(lambda: self.core.receiving == 'waiting')
+        self.assertEqual(self.adapter.requests.count('watch'), 4)
+        self.assertEqual(self.adapter.live_watchers, 1)
+        self.assertIsNone(self.core.error_code)
+
+    async def test_explicit_stop_cancels_slow_retry(self):
+        await self.connect()
+        self.core.retry_delays = ()
+        self.core.reconnect_interval = .03
+        await self.adapter.queue.put(AppError('IG_REQUEST_FAILED'))
+        await self.until(lambda: self.core.error_code == 'IG_RECONNECT_WAITING')
+        await self.core.dispatch({'op': 'stop'})
+        await asyncio.sleep(.05)
+        self.assertEqual(self.adapter.requests.count('watch'), 1)
+        self.assertEqual(self.core.receiving, 'stopped')
 
     async def test_explicit_stop_cancels_pending_reconnect(self):
         await self.connect()
@@ -245,7 +265,7 @@ class InstagramDesktopTests(unittest.IsolatedAsyncioTestCase):
             await self.core.dispatch(self.send_request())
         self.assertEqual(self.adapter.sends, 0)
 
-    async def test_pause_persists_and_mcp_operations_are_rejected(self):
+    async def test_pause_persists_and_incomplete_management_requests_are_rejected(self):
         await self.connect()
         await self.core.dispatch({'op': 'storage_pause', 'paused': True})
         self.assertEqual(self.adapter.live_watchers, 0)
@@ -254,7 +274,8 @@ class InstagramDesktopTests(unittest.IsolatedAsyncioTestCase):
         await self.core.close()
         self.core = self.make_core()
         self.assertTrue((await self.core.dispatch({'op': 'snapshot'}))['storagePaused'])
-        for op in ('management', 'mcp_configure', 'storage_delete', 'line_login_start', 'line_login_status', 'avatar'):
+        self.assertTrue((await self.core.dispatch({'op':'management'}))['storage']['paused'])
+        for op in ('mcp_configure', 'storage_delete', 'line_login_start', 'line_login_status', 'avatar'):
             with self.assertRaises(AppError):
                 await self.core.dispatch({'op': op})
 
@@ -287,7 +308,7 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
             try:
                 first = await router.dispatch({'op': 'connect', 'provider': 'line'})
                 second = await router.dispatch({'op': 'connect', 'provider': 'instagram'})
-                await asyncio.wait_for(instagram.ready.wait(), 1)
+                self.assertIsNotNone(router.cores['instagram'].sync_task)
                 self.assertTrue(all(c['provider'] == 'line' for c in first['conversations']))
                 self.assertTrue(all(c['provider'] == 'instagram' for c in second['conversations']))
                 self.assertEqual((await router.dispatch({'op': 'line_login_status'}))['stage'], 'idle')
@@ -317,6 +338,6 @@ class RouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1]['provider'], 'instagram')
         await router.dispatch({'op': 'snapshot'})
         self.assertEqual(events[-1]['provider'], 'line')
-        for value in ('x', None, ['instagram']):
+        for value in ('discord', None, ['instagram']):
             with self.assertRaises(AppError): await router.dispatch({'op': 'snapshot', 'provider': value})
         await router.close()

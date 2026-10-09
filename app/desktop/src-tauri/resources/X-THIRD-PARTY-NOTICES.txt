@@ -1,0 +1,25 @@
+The standalone Go helper links twittermeow from mautrix/twitter.
+Repository: https://github.com/mautrix/twitter
+Commit: 5282873f8a8941c11e6e0aa66aeb9c0e0d9fab3d
+License: AGPL-3.0-or-later; see upstream/mautrix-twitter/LICENSE and LICENSE.exceptions.
+Local source modifications: patches/twittermeow-local.patch.
+The named upstream license exceptions are not assumed to apply to this project.
+
+X Chat cryptography uses chatxdk 0.5.0.
+Repository: https://github.com/x-devplatform/chat-xdk
+Commit: 017650c0dec4018e282e878c52a5874abb911b34
+License: MIT; see upstream/chat-xdk/LICENSE.
+The unmodified synthetic interoperability vectors are used by our offline tests.
+
+Python cryptography 46.0.7: Apache-2.0 OR BSD-3-Clause.
+cffi 2.1.1: MIT. pycparser 3.0: BSD-3-Clause.
+Installed distributions retain their full licenses under .venv/lib/python*/site-packages.
+Transitive Go versions and checksums: bridge/go.mod and bridge/go.sum.
+
+xconnector/native_keychain.py is copied from this workspace's
+BeeperLocal_PoC_v0.4_Phase1/beeperlocal/native_keychain.py without modifying
+the original. It uses macOS Security.framework and preserves existing ACLs.
+
+No Beeper application, Beeper server, Matrix server, or paid X API service is
+called by this connector. github.com/beeper/req is an upstream open-source
+HTTP library dependency, not a Beeper service.

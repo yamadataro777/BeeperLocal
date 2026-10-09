@@ -1,0 +1,1379 @@
+package twittermeow
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	neturl "net/url"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
+
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/crypto"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/endpoints"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/payload"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/response"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/types"
+)
+
+// FormEncoder is implemented by types that can encode themselves to form data.
+type FormEncoder interface {
+	Encode() ([]byte, error)
+}
+
+func decodeXChatQueryResponse[T any](body []byte, opName string) (*T, error) {
+	var errorResponse struct {
+		Errors []response.XChatGraphQLError `json:"errors,omitempty"`
+	}
+	if err := json.Unmarshal(body, &errorResponse); err != nil {
+		return nil, err
+	}
+	if len(errorResponse.Errors) > 0 {
+		var graphQLError error = errorResponse.Errors[0]
+		if len(errorResponse.Errors) > 1 {
+			errs := make([]error, len(errorResponse.Errors))
+			for i := range errorResponse.Errors {
+				errs[i] = errorResponse.Errors[i]
+			}
+			graphQLError = errors.Join(errs...)
+		}
+		return nil, fmt.Errorf("%s returned GraphQL errors: %w", opName, graphQLError)
+	}
+
+	var resp T
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// makeXChatQueryRequest is a generic helper for XChat API GET requests that
+// pass GraphQL variables in URL query params.
+func makeXChatQueryRequest[T any](c *Client, ctx context.Context, url string, variables FormEncoder, opName string) (*T, error) {
+	query, err := variables.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	requestURL := url
+	if len(query) > 0 {
+		parsedURL, err := neturl.Parse(url)
+		if err != nil {
+			return nil, fmt.Errorf("parse request url: %w", err)
+		}
+		if parsedURL.RawQuery == "" {
+			parsedURL.RawQuery = string(query)
+		} else {
+			parsedURL.RawQuery += "&" + string(query)
+		}
+		requestURL = parsedURL.String()
+	}
+
+	c.Logger.Debug().
+		Int("query_length", len(query)).
+		Msg(opName + " payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            requestURL,
+		Method:         http.MethodGet,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+	})
+	if err != nil {
+		c.Logger.Debug().
+			Int("response_bytes", len(respBody)).
+			Err(err).
+			Msg(opName + " failed")
+		return nil, err
+	}
+
+	c.Logger.Trace().
+		Int("response_bytes", len(respBody)).
+		Msg(opName + " response")
+
+	return decodeXChatQueryResponse[T](respBody, opName)
+}
+
+func (c *Client) MarkConversationRead(ctx context.Context, params *payload.MarkConversationReadQuery) error {
+	encodedQueryBody, err := params.Encode()
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf(endpoints.CONVERSATION_MARK_READ_URL, params.ConversationID)
+	_, _, err = c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           encodedQueryBody,
+		ContentType:    types.ContentTypeForm,
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Client) SendTypingNotification(ctx context.Context, conversationID string) error {
+	variables := &payload.SendTypingNotificationVariables{
+		ConversationID: conversationID,
+	}
+
+	GQLPayload := &payload.GraphQLPayload{
+		Variables: variables,
+		QueryID:   "HL96-xZ3Y81IEzAdczDokg",
+	}
+
+	jsonBody, err := GQLPayload.Encode()
+	if err != nil {
+		return err
+	}
+
+	_, _, err = c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.SEND_TYPING_NOTIFICATION,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Referer:        fmt.Sprintf("%s/%s", endpoints.BASE_MESSAGES_URL, conversationID),
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	return err
+}
+
+// keep in mind this only deletes the message for you
+func (c *Client) DeleteMessageForMe(ctx context.Context, variables *payload.DMMessageDeleteMutationVariables) (*response.DMMessageDeleteMutationResponse, error) {
+	if variables.RequestID == "" {
+		variables.RequestID = uuid.NewString()
+	}
+
+	GQLPayload := &payload.GraphQLPayload{
+		Variables: variables,
+		QueryID:   "BJ6DtxA2llfjnRoRjaiIiw",
+	}
+
+	jsonBody, err := GQLPayload.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.GRAPHQL_MESSAGE_DELETION_MUTATION,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.DMMessageDeleteMutationResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) DeleteConversation(ctx context.Context, conversationID string, payload *payload.DMRequestQuery) error {
+	encodedQueryBody, err := payload.Encode()
+	if err != nil {
+		return err
+	}
+
+	resp, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            fmt.Sprintf(endpoints.DELETE_CONVERSATION_URL, conversationID),
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           encodedQueryBody,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeForm,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 204 {
+		return fmt.Errorf("failed to delete conversation by id %s (status_code=%d, response_body=%s)", conversationID, resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func (c *Client) PinConversation(ctx context.Context, conversationID string) (*response.PinConversationResponse, error) {
+	graphQlPayload := payload.GraphQLPayload{
+		Variables: payload.PinAndUnpinConversationVariables{
+			ConversationID: conversationID,
+			Label:          payload.LABEL_TYPE_PINNED,
+		},
+		QueryID: "o0aymgGiJY-53Y52YSUGVA",
+	}
+
+	jsonBody, err := graphQlPayload.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.PIN_CONVERSATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.PinConversationResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) UnpinConversation(ctx context.Context, conversationID string) (*response.UnpinConversationResponse, error) {
+	graphQlPayload := payload.GraphQLPayload{
+		Variables: payload.PinAndUnpinConversationVariables{
+			ConversationID: conversationID,
+			LabelType:      payload.LABEL_TYPE_PINNED,
+		},
+		QueryID: "_TQxP2Rb0expwVP9ktGrTQ",
+	}
+
+	jsonBody, err := graphQlPayload.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.UNPIN_CONVERSATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.UnpinConversationResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) React(ctx context.Context, reactionPayload *payload.ReactionActionPayload, remove bool) (*response.ReactionResponse, error) {
+	graphQlPayload := payload.GraphQLPayload{
+		Variables: reactionPayload,
+		QueryID:   "VyDyV9pC2oZEj6g52hgnhA",
+	}
+
+	url := endpoints.ADD_REACTION_URL
+	if remove {
+		url = endpoints.REMOVE_REACTION_URL
+		graphQlPayload.QueryID = "bV_Nim3RYHsaJwMkTXJ6ew"
+	}
+
+	jsonBody, err := graphQlPayload.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.ReactionResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) UpdateConversationAvatar(ctx context.Context, conversationID string, payload *payload.DMRequestQuery) error {
+	encodedQueryBody, err := payload.Encode()
+	if err != nil {
+		return err
+	}
+
+	resp, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            fmt.Sprintf(endpoints.UPDATE_CONVERSATION_AVATAR_URL, conversationID),
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           encodedQueryBody,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeForm,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 204 {
+		return fmt.Errorf("failed to update conversation avatar id=%s (status_code=%d, response_body=%s)", conversationID, resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func (c *Client) UpdateConversationName(ctx context.Context, conversationID string, payload *payload.DMRequestQuery) error {
+	encodedQueryBody, err := payload.Encode()
+	if err != nil {
+		return err
+	}
+
+	resp, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            fmt.Sprintf(endpoints.UPDATE_CONVERSATION_NAME_URL, conversationID),
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           encodedQueryBody,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeForm,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 204 {
+		return fmt.Errorf("failed to update conversation name id=%s (status_code=%d, response_body=%s)", conversationID, resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+func (c *Client) AddParticipants(ctx context.Context, variables *payload.AddParticipantsPayload) (*response.AddParticipantsResponse, error) {
+	graphQlPayload := payload.GraphQLPayload{
+		Variables: variables,
+		QueryID:   "oBwyQ0_xVbAQ8FAyG0pCRA",
+	}
+
+	url := endpoints.ADD_PARTICIPANTS_URL
+
+	jsonBody, err := graphQlPayload.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.AddParticipantsResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+// SendRawEncryptedMessage sends an already-encoded encrypted message payload.
+// This is primarily for testing/debugging purposes.
+func (c *Client) SendRawEncryptedMessage(ctx context.Context, conversationID, messageID, conversationToken, encodedMCE, encodedSig string) (*response.SendMessageMutationResponse, error) {
+	var sigPtr *string
+	if encodedSig != "" {
+		sigPtr = &encodedSig
+	}
+
+	pl := payload.NewSendMessageMutationPayload(payload.SendMessageMutationVariables{
+		ConversationID:               conversationID,
+		MessageID:                    messageID,
+		ConversationToken:            conversationToken,
+		EncodedMessageCreateEvent:    encodedMCE,
+		EncodedMessageEventSignature: sigPtr,
+	})
+
+	jsonBody, err := json.Marshal(pl)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Logger.Debug().RawJSON("payload", jsonBody).Msg("Sending raw encrypted message")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.SEND_MESSAGE_MUTATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	c.Logger.Debug().RawJSON("response", respBody).Msg("Got response for encrypted message")
+
+	var resp response.SendMessageMutationResponse
+	return &resp, json.Unmarshal(respBody, &resp)
+}
+
+// SendEncryptedMessageOpts contains options for sending an encrypted message.
+type SendEncryptedMessageOpts struct {
+	ConversationID string
+	MessageID      string // optional, generates UUID if empty
+	Text           string
+	Attachments    []*payload.MessageAttachment
+	ReplyTo        *payload.ReplyingToPreview
+	Entities       []*payload.RichTextEntity
+}
+
+func buildUnencryptedMessageMutationPayload(
+	ctx context.Context,
+	opts SendEncryptedMessageOpts,
+	senderID string,
+	signingKey *crypto.SigningKeyPair,
+) (*payload.SendMessageMutationPayload, error) {
+	if opts.ConversationID == "" {
+		return nil, fmt.Errorf("conversation ID is required")
+	}
+	if senderID == "" {
+		return nil, fmt.Errorf("sender ID is required")
+	}
+	if signingKey == nil || signingKey.SigningKey == nil || signingKey.KeyVersion == "" {
+		return nil, fmt.Errorf("complete signing key is required")
+	}
+
+	messageID := opts.MessageID
+	if messageID == "" {
+		messageID = uuid.NewString()
+	}
+
+	builder := crypto.NewMessageBuilder(nil, senderID).
+		SetMessageID(messageID).
+		SetConversationID(opts.ConversationID).
+		SetText(opts.Text).
+		WithSigningKey(signingKey.SigningKey, signingKey.KeyVersion)
+	for _, att := range opts.Attachments {
+		builder.AddAttachment(att)
+	}
+	if opts.ReplyTo != nil {
+		builder.SetReplyTo(opts.ReplyTo)
+	}
+	if len(opts.Entities) > 0 {
+		builder.SetEntities(opts.Entities)
+	}
+
+	encodedMCE, encodedSig, err := builder.BuildForSend(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("build unencrypted message: %w", err)
+	}
+	if encodedSig == "" {
+		return nil, fmt.Errorf("build unencrypted message: signature is required")
+	}
+
+	return payload.NewSendMessageMutationPayload(payload.SendMessageMutationVariables{
+		ConversationID:               opts.ConversationID,
+		MessageID:                    messageID,
+		EncodedMessageCreateEvent:    encodedMCE,
+		EncodedMessageEventSignature: &encodedSig,
+	}), nil
+}
+
+// SendUnencryptedMessage sends a signed plaintext message through XChat.
+func (c *Client) SendUnencryptedMessage(ctx context.Context, opts SendEncryptedMessageOpts) (*response.SendMessageMutationResponse, error) {
+	signingKey, err := c.keyManager.GetOwnSigningKey(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get signing key: %w", err)
+	}
+	pl, err := buildUnencryptedMessageMutationPayload(ctx, opts, c.GetCurrentUserID(), signingKey)
+	if err != nil {
+		return nil, err
+	}
+	return c.sendMessageMutation(ctx, pl)
+}
+
+// SendEncryptedEditOpts contains options for sending an encrypted message edit.
+type SendEncryptedEditOpts struct {
+	ConversationID          string
+	MessageID               string // optional, generates UUID if empty
+	TargetMessageSequenceID string
+	UpdatedText             string
+	Entities                []*payload.RichTextEntity
+}
+
+func (c *Client) sendMessageMutation(ctx context.Context, pl *payload.SendMessageMutationPayload) (*response.SendMessageMutationResponse, error) {
+	token, err := c.ensureConversationToken(ctx, pl.Variables.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation token: %w", err)
+	}
+
+	requestPayload := *pl
+	requestPayload.Variables.ConversationToken = token
+
+	jsonBody, err := json.Marshal(&requestPayload)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Logger.Debug().
+		RawJSON("payload", jsonBody).
+		Msg("SendMessageMutation payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.SEND_MESSAGE_MUTATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var resp response.SendMessageMutationResponse
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return nil, err
+	}
+	if len(resp.Errors) > 0 {
+		return nil, fmt.Errorf("send message mutation error: %s", resp.Errors[0].Message)
+	}
+	if resp.Data.XChatSendCreateMessageEvent.EncodedMessageEvent == "" {
+		return nil, fmt.Errorf("send message mutation returned no encoded message event")
+	}
+	return &resp, nil
+}
+
+// SendEncryptedReaction sends a reaction add/remove via the XChat protocol.
+// targetMessageSequenceID must be the XChat message sequence ID of the message being reacted to.
+func (c *Client) SendEncryptedReaction(ctx context.Context, conversationID, targetMessageSequenceID, emoji string, remove bool) (*response.SendMessageMutationResponse, error) {
+	token, err := c.ensureConversationToken(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation token: %w", err)
+	}
+
+	messageID := uuid.NewString()
+
+	builder := crypto.NewMessageBuilder(c.keyManager, c.GetCurrentUserID()).
+		SetMessageID(messageID).
+		SetConversationID(conversationID)
+
+	if remove {
+		builder.SetReactionRemove(targetMessageSequenceID, emoji)
+	} else {
+		builder.SetReactionAdd(targetMessageSequenceID, emoji)
+	}
+
+	encodedMCE, encodedSig, err := builder.BuildForSend(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("build reaction: %w", err)
+	}
+
+	var sigPtr *string
+	if encodedSig != "" {
+		sigPtr = &encodedSig
+	}
+
+	pl := payload.NewSendMessageMutationPayload(payload.SendMessageMutationVariables{
+		ConversationID:               conversationID,
+		MessageID:                    messageID,
+		ConversationToken:            token,
+		EncodedMessageCreateEvent:    encodedMCE,
+		EncodedMessageEventSignature: sigPtr,
+	})
+
+	return c.sendMessageMutation(ctx, pl)
+}
+
+// SendEncryptedEdit sends a message edit via the XChat protocol.
+// targetMessageSequenceID must be the XChat message sequence ID of the message being edited.
+func (c *Client) SendEncryptedEdit(ctx context.Context, opts SendEncryptedEditOpts) (*response.SendMessageMutationResponse, error) {
+	if opts.ConversationID == "" {
+		return nil, fmt.Errorf("conversation ID is required")
+	}
+	if opts.TargetMessageSequenceID == "" {
+		return nil, fmt.Errorf("target message sequence ID is required")
+	}
+
+	token, err := c.ensureConversationToken(ctx, opts.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation token: %w", err)
+	}
+
+	messageID := opts.MessageID
+	if messageID == "" {
+		messageID = uuid.NewString()
+	}
+
+	builder := crypto.NewMessageBuilder(c.keyManager, c.GetCurrentUserID()).
+		SetMessageID(messageID).
+		SetConversationID(opts.ConversationID).
+		SetMessageEdit(opts.TargetMessageSequenceID, opts.UpdatedText, opts.Entities)
+
+	encodedMCE, encodedSig, err := builder.BuildForSend(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("build edit: %w", err)
+	}
+
+	var sigPtr *string
+	if encodedSig != "" {
+		sigPtr = &encodedSig
+	}
+
+	pl := payload.NewSendMessageMutationPayload(payload.SendMessageMutationVariables{
+		ConversationID:               opts.ConversationID,
+		MessageID:                    messageID,
+		ConversationToken:            token,
+		EncodedMessageCreateEvent:    encodedMCE,
+		EncodedMessageEventSignature: sigPtr,
+	})
+
+	return c.sendMessageMutation(ctx, pl)
+}
+
+// SendEncryptedMessage sends an encrypted message via the XChat protocol.
+func (c *Client) SendEncryptedMessage(ctx context.Context, opts SendEncryptedMessageOpts) (*response.SendMessageMutationResponse, error) {
+	// Get the server-provided conversation token for this conversation
+	token, err := c.ensureConversationToken(ctx, opts.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("get conversation token: %w", err)
+	}
+
+	messageID := opts.MessageID
+	if messageID == "" {
+		messageID = uuid.NewString()
+	}
+
+	builder := crypto.NewMessageBuilder(c.keyManager, c.GetCurrentUserID()).
+		SetMessageID(messageID).
+		SetConversationID(opts.ConversationID).
+		SetText(opts.Text)
+
+	for _, att := range opts.Attachments {
+		builder.AddAttachment(att)
+	}
+	if opts.ReplyTo != nil {
+		c.Logger.Debug().
+			Str("conversation_id", opts.ConversationID).
+			Str("message_id", messageID).
+			Bool("reply_has_text", opts.ReplyTo.MessageText != nil && *opts.ReplyTo.MessageText != "").
+			Int("reply_attachments", len(opts.ReplyTo.Attachments)).
+			Msg("Sending reply with ReplyingToPreview")
+		builder.SetReplyTo(opts.ReplyTo)
+	}
+	if len(opts.Entities) > 0 {
+		builder.SetEntities(opts.Entities)
+	}
+
+	encodedMCE, encodedSig, err := builder.BuildForSend(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("build message: %w", err)
+	}
+
+	var sigPtr *string
+	if encodedSig != "" {
+		sigPtr = &encodedSig
+	}
+
+	pl := payload.NewSendMessageMutationPayload(payload.SendMessageMutationVariables{
+		ConversationID:               opts.ConversationID,
+		MessageID:                    messageID,
+		ConversationToken:            token,
+		EncodedMessageCreateEvent:    encodedMCE,
+		EncodedMessageEventSignature: sigPtr,
+	})
+
+	return c.sendMessageMutation(ctx, pl)
+}
+
+func (c *Client) getXChatInboxPage(ctx context.Context, url string, variables FormEncoder, opName, responseKey string) (*response.XChatInboxPage, error) {
+	body, err := makeXChatQueryRequest[json.RawMessage](c, ctx, url, variables, opName)
+	if err != nil {
+		return nil, err
+	}
+	pageBody := gjson.GetBytes(*body, "data."+responseKey)
+	if !pageBody.IsObject() {
+		return nil, fmt.Errorf("%s returned no inbox page", opName)
+	}
+	var page response.XChatInboxPage
+	if err := json.Unmarshal([]byte(pageBody.Raw), &page); err != nil {
+		return nil, fmt.Errorf("%s returned an invalid inbox page: %w", opName, err)
+	}
+	if page.ErrorCode != "" {
+		return nil, fmt.Errorf("%s returned an inbox error: %s", opName, page.ErrorCode)
+	}
+	isSnapshot := page.Typename == "XChatGetInboxPageResponse" && pageBody.Get("items").IsArray()
+	isDelta := page.Typename == "XChatGetMessageEventsPageResponse" && pageBody.Get("encoded_message_events").IsArray() && page.MessageEventsCursor != nil
+	if !isSnapshot && !isDelta {
+		return nil, fmt.Errorf("%s returned an unsupported inbox page shape", opName)
+	}
+	if isSnapshot {
+		c.logXChatInboxItemShape(pageBody, &page, "data."+responseKey)
+	}
+	cursorPresent, pullFinished := page.InboxCursor.CursorID != "", page.InboxCursor.PullFinished
+	if cursor := page.MessageEventsCursor; cursor != nil {
+		cursorPresent, pullFinished = cursor.MaxLocalSequenceID != "", cursor.PullFinished
+	}
+	c.Logger.Debug().Str("operation", opName).
+		Int("response_bytes", len(*body)).Int("item_count", len(page.Items)).
+		Int("event_count", len(page.EncodedMessageEvents)).
+		Bool("cursor_present", cursorPresent).Bool("pull_finished", pullFinished).
+		Msg("Validated XChat inbox response")
+	return &page, nil
+}
+
+func (c *Client) GetInitialXChatPage(ctx context.Context, variables *payload.GetInitialXChatPageQueryVariables) (*response.GetInitialXChatPageQueryResponse, error) {
+	page, err := c.getXChatInboxPage(ctx, endpoints.GET_INITIAL_XCHAT_PAGE_QUERY_URL, variables, "GetInitialXChatPage", "get_initial_chat_page")
+	if err != nil {
+		return nil, err
+	}
+	result := &response.GetInitialXChatPageQueryResponse{}
+	result.Data.GetInboxPage = *page
+	return result, nil
+}
+
+func (c *Client) GetInboxPageRequest(ctx context.Context, variables *payload.GetInboxPageRequestQueryVariables) (*response.GetInboxPageRequestQueryResponse, error) {
+	url, opName, responseKey := endpoints.GET_INBOX_PAGE_REQUEST_QUERY_URL, "GetInboxPageRequest", "get_inbox_page"
+	if variables.ContinueCursor != nil && variables.ContinueCursor.MaxLocalSequenceID != "" {
+		url, opName, responseKey = endpoints.GET_MESSAGE_EVENTS_PAGE_QUERY_URL, "GetMessageEventsPage", "get_message_events_page"
+	}
+	page, err := c.getXChatInboxPage(ctx, url, variables, opName, responseKey)
+	if err != nil {
+		return nil, err
+	}
+	result := &response.GetInboxPageRequestQueryResponse{}
+	result.Data.GetInboxPage = *page
+	return result, nil
+}
+
+func (c *Client) GetConversationData(ctx context.Context, variables *payload.GetInboxPageConversationDataQueryVariables) (*response.GetInboxPageConversationDataResponse, error) {
+	return makeXChatQueryRequest[response.GetInboxPageConversationDataResponse](c, ctx, endpoints.GET_INBOX_PAGE_CONV_DATA_QUERY_URL, variables, "GetConversationData")
+}
+
+func (c *Client) GetUsersByIdsForXChat(ctx context.Context, variables *payload.GetUsersByIdsForXChatVariables) (*response.GetUsersByIdsForXChatResponse, error) {
+	return makeXChatQueryRequest[response.GetUsersByIdsForXChatResponse](c, ctx, endpoints.GET_USERS_BY_IDS_FOR_XCHAT_URL, variables, "GetUsersByIdsForXChat")
+}
+
+func (c *Client) GetConversationPage(ctx context.Context, variables *payload.GetConversationPageQueryVariables) (*response.GetConversationPageQueryResponse, error) {
+	return makeXChatQueryRequest[response.GetConversationPageQueryResponse](c, ctx, endpoints.GET_CONVERSATION_PAGE_QUERY_URL, variables, "GetConversationPage")
+}
+
+// DeleteXChatMessageOpts contains options for deleting messages via XChat.
+type DeleteXChatMessageOpts struct {
+	ConversationID string
+	SequenceIDs    []string // The sequence IDs of the messages to delete
+	DeleteForAll   bool     // If true, delete for everyone; if false, delete only for self
+}
+
+// DeleteXChatMessage deletes messages via the XChat DeleteMessageMutation GraphQL endpoint.
+func (c *Client) DeleteXChatMessage(ctx context.Context, opts DeleteXChatMessageOpts) error {
+	if opts.ConversationID == "" {
+		return fmt.Errorf("conversation ID is required")
+	}
+	if len(opts.SequenceIDs) == 0 {
+		return fmt.Errorf("at least one sequence ID is required")
+	}
+
+	senderID := c.GetCurrentUserID()
+	if senderID == "" {
+		return fmt.Errorf("sender ID is required")
+	}
+
+	keyPair, err := c.keyManager.GetOwnSigningKey(ctx)
+	if err != nil {
+		return fmt.Errorf("get signing key: %w", err)
+	}
+	if keyPair == nil || keyPair.SigningKey == nil || keyPair.KeyVersion == "" {
+		return fmt.Errorf("missing signing key data: signed message deletion requires message_event_signature")
+	}
+
+	deleteAction := payload.DeleteMessageActionTypeForSelf
+	messageDeleteAction := payload.DeleteMessageActionDeleteForSelf
+	if opts.DeleteForAll {
+		deleteAction = payload.DeleteMessageActionTypeForAll
+		messageDeleteAction = payload.DeleteMessageActionDeleteForAll
+	}
+
+	actionSignatures := make([]payload.DeleteMessageActionSignature, 0, len(opts.SequenceIDs))
+	for _, seqID := range opts.SequenceIDs {
+		messageID := uuid.NewString()
+		actionSig, err := buildXChatDeleteActionSignature(
+			keyPair,
+			messageID,
+			senderID,
+			opts.ConversationID,
+			seqID,
+			messageDeleteAction,
+		)
+		if err != nil {
+			return fmt.Errorf("build delete action signature for %s: %w", seqID, err)
+		}
+
+		actionSignatures = append(actionSignatures, actionSig)
+	}
+
+	pl := payload.NewDeleteMessageMutationPayload(payload.DeleteMessageMutationVariables{
+		SequenceIDs:         opts.SequenceIDs,
+		ConversationID:      opts.ConversationID,
+		DeleteMessageAction: deleteAction,
+		ActionSignatures:    actionSignatures,
+	})
+
+	jsonBody, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("payload", jsonBody).
+		Msg("DeleteMessageMutation payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.DELETE_MESSAGE_MUTATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("response", respBody).
+		Msg("DeleteMessageMutation response")
+
+	return parseDeleteMessageMutationResponse(respBody)
+}
+
+func buildXChatDeleteActionSignature(
+	keyPair *crypto.SigningKeyPair,
+	messageID, senderID, conversationID, sequenceID string,
+	action payload.DeleteMessageAction,
+) (payload.DeleteMessageActionSignature, error) {
+	thriftAction := int32(action)
+	detail := &payload.MessageEventDetail{
+		MessageDeleteEvent: &payload.MessageDeleteEvent{
+			SequenceIds:         []string{sequenceID},
+			DeleteMessageAction: &thriftAction,
+		},
+	}
+	encodedDetail, err := crypto.EncodeMessageEventDetail(detail)
+	if err != nil {
+		return payload.DeleteMessageActionSignature{}, fmt.Errorf("encode message event detail: %w", err)
+	}
+
+	sequenceIDs := []string{sequenceID}
+	signaturePayload := crypto.SignaturePayloadMessageDeleteEvent(
+		messageID,
+		senderID,
+		conversationID,
+		action,
+		sequenceIDs,
+	)
+	signature, err := crypto.SignMessageDeleteEvent(
+		keyPair.SigningKey,
+		messageID,
+		senderID,
+		conversationID,
+		action,
+		sequenceIDs,
+	)
+	if err != nil {
+		return payload.DeleteMessageActionSignature{}, fmt.Errorf("sign message delete event: %w", err)
+	}
+
+	return payload.DeleteMessageActionSignature{
+		MessageID:                 messageID,
+		EncodedMessageEventDetail: encodedDetail,
+		SignaturePayload:          signaturePayload,
+		MessageEventSignature: &payload.DeleteMessageEventSignatureJSON{
+			Signature:        signature,
+			PublicKeyVersion: keyPair.KeyVersion,
+			SignatureVersion: crypto.SignatureVersion7,
+		},
+	}, nil
+}
+
+func parseDeleteMessageMutationResponse(respBody []byte) error {
+	var resp struct {
+		Data struct {
+			DeleteMessages *struct {
+				Typename  string          `json:"__typename"`
+				ErrorCode json.RawMessage `json:"error_code"`
+			} `json:"xchat_delete_messages"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return fmt.Errorf("decode delete message mutation response: %w", err)
+	}
+	if len(resp.Errors) > 0 {
+		return fmt.Errorf("delete message mutation error: %s", resp.Errors[0].Message)
+	}
+	if resp.Data.DeleteMessages == nil {
+		return fmt.Errorf("delete message mutation returned no result")
+	}
+	if code := string(resp.Data.DeleteMessages.ErrorCode); code != "" && code != "null" {
+		return fmt.Errorf("delete message mutation returned error code %s", code)
+	}
+	if resp.Data.DeleteMessages.Typename != "DeleteMessageResponse" {
+		return fmt.Errorf("delete message mutation returned unexpected result %q", resp.Data.DeleteMessages.Typename)
+	}
+	return nil
+}
+
+// MuteConversation mutes a conversation via the XChat MuteConversation GraphQL endpoint.
+func (c *Client) MuteConversation(ctx context.Context, conversationID string) error {
+	if conversationID == "" {
+		return fmt.Errorf("conversation ID is required")
+	}
+
+	senderID := c.GetCurrentUserID()
+	if senderID == "" {
+		return fmt.Errorf("sender ID is required")
+	}
+
+	token, err := c.ensureConversationToken(ctx, conversationID)
+	if err != nil {
+		return fmt.Errorf("get conversation token: %w", err)
+	}
+
+	keyPair, err := c.keyManager.GetOwnSigningKey(ctx)
+	if err != nil {
+		return fmt.Errorf("get signing key: %w", err)
+	}
+	if keyPair == nil || keyPair.SigningKey == nil || keyPair.KeyVersion == "" {
+		return fmt.Errorf("missing signing key data: signed conversation deletion requires message_event_signature")
+	}
+
+	createdAtMsec := fmt.Sprintf("%d", time.Now().UnixMilli())
+	messageID := uuid.NewString()
+
+	detail := &payload.MuteConversation{
+		MutedConversationIds: []string{conversationID},
+	}
+
+	encodedDetail, err := crypto.EncodeMuteConversation(detail)
+	if err != nil {
+		return fmt.Errorf("encode mute conversation: %w", err)
+	}
+
+	actionSig := payload.DeleteMessageActionSignature{
+		MessageID:                 messageID,
+		EncodedMessageEventDetail: encodedDetail,
+	}
+	actionSig.SignaturePayload = crypto.SignaturePayloadMuteConversation(
+		messageID,
+		senderID,
+		conversationID,
+		token,
+		createdAtMsec,
+		encodedDetail,
+	)
+
+	if keyPair != nil && keyPair.SigningKey != nil && keyPair.KeyVersion != "" {
+		signature, err := crypto.SignMuteConversation(
+			keyPair.SigningKey,
+			messageID,
+			senderID,
+			conversationID,
+			token,
+			createdAtMsec,
+			encodedDetail,
+		)
+		if err != nil {
+			return fmt.Errorf("sign mute event: %w", err)
+		}
+
+		sigVersion := crypto.SignatureVersion4
+		actionSig.MessageEventSignature = &payload.DeleteMessageEventSignatureJSON{
+			Signature:        signature,
+			PublicKeyVersion: keyPair.KeyVersion,
+			SignatureVersion: sigVersion,
+		}
+	}
+
+	pl := payload.NewMuteConversationMutationPayload(payload.MuteConversationMutationVariables{
+		ConversationIDs:  []string{conversationID},
+		ActionSignatures: []payload.DeleteMessageActionSignature{actionSig},
+	})
+
+	jsonBody, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("payload", jsonBody).
+		Msg("MuteConversation payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.MUTE_CONVERSATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("response", respBody).
+		Msg("MuteConversation response")
+
+	return nil
+}
+
+// UnmuteConversation unmutes a conversation via the XChat UnmuteConversation GraphQL endpoint.
+func (c *Client) UnmuteConversation(ctx context.Context, conversationID string) error {
+	if conversationID == "" {
+		return fmt.Errorf("conversation ID is required")
+	}
+
+	senderID := c.GetCurrentUserID()
+	if senderID == "" {
+		return fmt.Errorf("sender ID is required")
+	}
+
+	token, err := c.ensureConversationToken(ctx, conversationID)
+	if err != nil {
+		return fmt.Errorf("get conversation token: %w", err)
+	}
+
+	keyPair, err := c.keyManager.GetOwnSigningKey(ctx)
+	if err != nil {
+		return fmt.Errorf("get signing key: %w", err)
+	}
+
+	createdAtMsec := fmt.Sprintf("%d", time.Now().UnixMilli())
+	messageID := uuid.NewString()
+
+	detail := &payload.UnmuteConversation{
+		UnmutedConversationIds: []string{conversationID},
+	}
+
+	encodedDetail, err := crypto.EncodeUnmuteConversation(detail)
+	if err != nil {
+		return fmt.Errorf("encode unmute conversation: %w", err)
+	}
+
+	actionSig := payload.DeleteMessageActionSignature{
+		MessageID:                 messageID,
+		EncodedMessageEventDetail: encodedDetail,
+	}
+	actionSig.SignaturePayload = crypto.SignaturePayloadUnmuteConversation(
+		messageID,
+		senderID,
+		conversationID,
+		token,
+		createdAtMsec,
+		encodedDetail,
+	)
+
+	if keyPair != nil && keyPair.SigningKey != nil && keyPair.KeyVersion != "" {
+		signature, err := crypto.SignUnmuteConversation(
+			keyPair.SigningKey,
+			messageID,
+			senderID,
+			conversationID,
+			token,
+			createdAtMsec,
+			encodedDetail,
+		)
+		if err != nil {
+			return fmt.Errorf("sign unmute event: %w", err)
+		}
+
+		sigVersion := crypto.SignatureVersion4
+		actionSig.MessageEventSignature = &payload.DeleteMessageEventSignatureJSON{
+			Signature:        signature,
+			PublicKeyVersion: keyPair.KeyVersion,
+			SignatureVersion: sigVersion,
+		}
+	}
+
+	pl := payload.NewUnmuteConversationMutationPayload(payload.UnmuteConversationMutationVariables{
+		ConversationIDs:  []string{conversationID},
+		ActionSignatures: []payload.DeleteMessageActionSignature{actionSig},
+	})
+
+	jsonBody, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("payload", jsonBody).
+		Msg("UnmuteConversation payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.UNMUTE_CONVERSATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("response", respBody).
+		Msg("UnmuteConversation response")
+
+	return nil
+}
+
+// DeleteXChatConversation deletes a conversation via the XChat ConversationDeletion GraphQL endpoint.
+func (c *Client) DeleteXChatConversation(ctx context.Context, conversationID string) error {
+	if conversationID == "" {
+		return fmt.Errorf("conversation ID is required")
+	}
+
+	senderID := c.GetCurrentUserID()
+	if senderID == "" {
+		return fmt.Errorf("sender ID is required")
+	}
+
+	token, err := c.keyManager.GetConversationToken(ctx, conversationID)
+	if err != nil {
+		if errors.Is(err, crypto.ErrKeyNotFound) {
+			c.Logger.Debug().
+				Str("conversation_id", conversationID).
+				Msg("DeleteXChatConversation: conversation token missing, continuing with empty token")
+			token = ""
+		} else {
+			return fmt.Errorf("get conversation token: %w", err)
+		}
+	}
+
+	keyPair, err := c.keyManager.GetOwnSigningKey(ctx)
+	if err != nil {
+		return fmt.Errorf("get signing key: %w", err)
+	}
+
+	createdAtMsec := fmt.Sprintf("%d", time.Now().UnixMilli())
+	messageID := uuid.NewString()
+
+	detail := &payload.MessageEventDetail{
+		ConversationDeleteEvent: &payload.ConversationDeleteEvent{
+			ConversationId: &conversationID,
+		},
+	}
+
+	encodedDetail, err := crypto.EncodeMessageEventDetail(detail)
+	if err != nil {
+		return fmt.Errorf("encode conversation delete event: %w", err)
+	}
+
+	actionSig := payload.DeleteMessageActionSignature{
+		MessageID:                 messageID,
+		EncodedMessageEventDetail: encodedDetail,
+	}
+	actionSig.SignaturePayload = crypto.SignaturePayloadConversationDeletion(messageID, senderID, conversationID)
+
+	signature, err := crypto.SignConversationDeletion(
+		keyPair.SigningKey,
+		messageID,
+		senderID,
+		conversationID,
+		token,
+		createdAtMsec,
+		encodedDetail,
+	)
+	if err != nil {
+		return fmt.Errorf("sign conversation deletion event: %w", err)
+	}
+
+	sigVersion := crypto.SignatureVersion4
+	actionSig.MessageEventSignature = &payload.DeleteMessageEventSignatureJSON{
+		Signature:        signature,
+		PublicKeyVersion: keyPair.KeyVersion,
+		SignatureVersion: sigVersion,
+	}
+
+	pl := payload.NewDeleteConversationMutationPayload(payload.DeleteConversationMutationVariables{
+		ConversationID:   conversationID,
+		ActionSignatures: []payload.DeleteMessageActionSignature{actionSig},
+	})
+
+	jsonBody, err := json.Marshal(pl)
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("payload", jsonBody).
+		Msg("DeleteXChatConversation payload")
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.DELETE_CONVERSATION_MUTATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return err
+	}
+
+	c.Logger.Debug().
+		RawJSON("response", respBody).
+		Msg("DeleteXChatConversation response")
+
+	return nil
+}
+
+func (c *Client) GetInitialInboxState(ctx context.Context, params *payload.DMRequestQuery) (*response.InboxInitialStateResponse, error) {
+	encodedQuery, err := params.Encode()
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s?%s", endpoints.INBOX_INITIAL_STATE_URL, string(encodedQuery))
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodGet,
+		WithClientUUID: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.InboxInitialStateResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) GetDMUserUpdates(ctx context.Context, params *payload.DMRequestQuery) (*response.GetDMUserUpdatesResponse, error) {
+	encodedQuery, err := params.Encode()
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s?%s", endpoints.DM_USER_UPDATES_URL, string(encodedQuery))
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodGet,
+		WithClientUUID: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.GetDMUserUpdatesResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+// FetchConversationContext fetches messages for a conversation via the REST API.
+// Used for backfill in unencrypted/untrusted conversations.
+func (c *Client) FetchConversationContext(ctx context.Context, conversationID string, params *payload.DMRequestQuery, context payload.ContextInfo) (*response.ConversationDMResponse, error) {
+	params.Context = context
+	encodedQuery, err := params.Encode()
+	if err != nil {
+		return nil, err
+	}
+	url := fmt.Sprintf("%s?%s", fmt.Sprintf(endpoints.CONVERSATION_FETCH_MESSAGES_URL, conversationID), string(encodedQuery))
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodGet,
+		WithClientUUID: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.ConversationDMResponse{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) AcceptConversation(ctx context.Context, conversationID string) error {
+	resp, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            fmt.Sprintf(endpoints.ACCEPT_CONVERSATION_URL, conversationID),
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Referer:        endpoints.BASE_MESSAGES_URL,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeForm,
+	})
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode > 204 {
+		return fmt.Errorf("failed to accept conversation id=%s (status_code=%d, response_body=%s)", conversationID, resp.StatusCode, string(respBody))
+	}
+
+	return nil
+}
+
+// SendDirectMessage sends a message via the REST API (used for untrusted conversations)
+func (c *Client) SendDirectMessage(ctx context.Context, pl *payload.SendDirectMessagePayload) (*response.TwitterInboxData, error) {
+	if pl.RequestID == "" {
+		pl.RequestID = uuid.NewString()
+	}
+
+	jsonBody, err := pl.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	query, _ := (payload.DMSendQuery{}).Default().Encode()
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.SEND_DM_URL + "?" + string(query),
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Body:           jsonBody,
+		Referer:        fmt.Sprintf("%s/%s", endpoints.BASE_MESSAGES_URL, pl.ConversationID),
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	data := response.TwitterInboxData{}
+	return &data, json.Unmarshal(respBody, &data)
+}
+
+func (c *Client) AddXChatPublicKey(ctx context.Context, vars *payload.AddXChatPublicKeyMutationVariables) (*response.AddXChatPublicKeyResponse, error) {
+	if vars == nil {
+		return nil, fmt.Errorf("variables are required")
+	}
+
+	jsonBody, err := json.Marshal(payload.NewAddXChatPublicKeyMutationPayload(*vars))
+	if err != nil {
+		return nil, err
+	}
+
+	_, respBody, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            endpoints.ADD_XCHAT_PUBLIC_KEY_MUTATION_URL,
+		Method:         http.MethodPost,
+		WithClientUUID: true,
+		Origin:         endpoints.BASE_URL,
+		ContentType:    types.ContentTypeJSON,
+		Body:           jsonBody,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &response.AddXChatPublicKeyResponse{}
+	return resp, json.Unmarshal(respBody, resp)
+}
+
+func (c *Client) GetPublicKeys(ctx context.Context, userIDs []string) (*response.GetPublicKeysResponse, error) {
+	variables := payload.NewGetPublicKeysQueryVariables(userIDs)
+	return makeXChatQueryRequest[response.GetPublicKeysResponse](c, ctx, endpoints.GET_PUBLIC_KEYS_QUERY_URL, variables, "GetPublicKeys")
+}

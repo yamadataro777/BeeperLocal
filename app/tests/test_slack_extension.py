@@ -235,6 +235,7 @@ class SlackCoreTests(unittest.IsolatedAsyncioTestCase):
         core = SlackDesktop(credentials=self.store, db_factory=lambda: EncryptedMessageStore(b"k"*32, self.path),
             connector_factory=lambda store: SlackConnector(store, api=self.backend), emit=self.events.append)
         core.poll_interval = .015
+        core.supports_all_sync = lambda: False  # Legacy receiver contract; all-conversation tests are separate.
         core.retry_delays = (.005, .01)
         return core
 
@@ -281,15 +282,29 @@ class SlackCoreTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.04)
         self.assertEqual(calls, len(self.backend.calls))
 
-    async def test_poll_retries_are_bounded_and_stop_cancels(self):
+    async def test_poll_slow_retries_recover_and_stop_cancels(self):
         await self.connect()
+        self.core.reconnect_interval = .03
         self.backend.history_error = AppError("NETWORK_ERROR")
-        await self.until(lambda: self.core.error_code == "SYNC_RETRY_EXHAUSTED")
+        await self.until(lambda: self.core.error_code == "SLACK_RECONNECT_WAITING")
+        self.assertEqual(self.core.receiving, "reconnecting")
         self.backend.history_error = None
-        await self.connect()
+        await self.until(lambda: self.core.receiving == "waiting")
+        self.assertIsNone(self.core.error_code)
         await self.core.dispatch({"op":"stop"})
         before = len(self.backend.calls)
         await asyncio.sleep(.04)
+        self.assertEqual(before, len(self.backend.calls))
+
+    async def test_stop_cancels_slow_retry_before_another_request(self):
+        await self.connect()
+        self.core.retry_delays = ()
+        self.core.reconnect_interval = .04
+        self.backend.history_error = AppError("NETWORK_ERROR")
+        await self.until(lambda: self.core.error_code == "SLACK_RECONNECT_WAITING")
+        await self.core.dispatch({"op": "stop"})
+        before = len(self.backend.calls)
+        await asyncio.sleep(.06)
         self.assertEqual(before, len(self.backend.calls))
 
     async def test_send_intent_committed_before_one_post_and_restart_unknown_no_resend(self):
@@ -422,7 +437,7 @@ class SlackCoreTests(unittest.IsolatedAsyncioTestCase):
         self.core = self.make_core()
         state = await self.core.dispatch({"op":"snapshot"})
         self.assertTrue(state["storagePaused"])
-        for op in ("line_login_start","avatar","storage_delete_preview"):
+        for op in ("line_login_start","avatar"):
             with self.assertRaises(AppError): await self.core.dispatch({"op":op})
 
 

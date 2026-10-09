@@ -1,4 +1,4 @@
-"""Private GUI onboarding and bounded in-memory profile images. No auth data in logs/DB."""
+"""Private GUI onboarding and bounded, encrypted profile image caching."""
 import asyncio
 import base64
 from collections import OrderedDict
@@ -18,12 +18,37 @@ def valid_picture_path(path):
     return isinstance(path, str) and bool(re.fullmatch(r"/[A-Za-z0-9_./-]{1,1024}", path)) and ".." not in path and not path.startswith("//")
 
 
+def profile_reference(provider, locator):
+    if provider == 'line':
+        value = locator.get('picture_path', '')
+        return value if valid_picture_path(value) else None
+    if provider == 'instagram':
+        from .desktop_media import allowed_attachment_url
+        value = locator.get('picture_url', '')
+        return value if isinstance(value, str) and len(value) <= 4096 and allowed_attachment_url(provider, value) else None
+    return None
+
+
+def profile_version(provider, locator):
+    value = profile_reference(provider, locator)
+    if value and provider == 'instagram':
+        from urllib.parse import urlsplit
+        value = urlsplit(value).path  # CDN token/shard rotation does not change the photo.
+    return sha256(value.encode()).hexdigest() if value else None
+
+
 async def download_avatar(path):
     if not valid_picture_path(path):
         return None
+    return await download_raster("https://profile.line-scdn.net" + path)
+
+
+async def download_raster(url):
+    """Called only after the provider has validated its fixed image host/path."""
     import httpx2
-    async with httpx2.AsyncClient(timeout=8, follow_redirects=False, trust_env=False) as client:
-        async with client.stream("GET", "https://profile.line-scdn.net" + path) as response:
+    from .tls import client_context
+    async with httpx2.AsyncClient(timeout=8, follow_redirects=False, trust_env=False, verify=client_context()) as client:
+        async with client.stream("GET", url) as response:
             if response.status_code != 200:
                 return None
             mime = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -131,6 +156,7 @@ class DesktopProfiles:
         return self.login_state
 
     async def clear_avatars(self):
+        await self.clear_media()
         self.avatar_generation += 1
         tasks = list(self.avatar_tasks.values())
         for task in tasks: task.cancel()
@@ -140,13 +166,18 @@ class DesktopProfiles:
 
     def avatar(self, identity):
         record = self._record(identity)
-        path = record.conversation.locator.get("picture_path", "")
-        version = picture_version(path)
+        path = profile_reference(self.provider, record.conversation.locator)
+        version = profile_version(self.provider, record.conversation.locator)
         key = (record.id, version)
         if not version: return {"image": None, "pending": False}
         if key in self.avatar_cache:
             self.avatar_cache.move_to_end(key)
             return {"image": self.avatar_cache[key], "pending": False}
+        saved = self.db.private_get('profile.v1.' + record.id)
+        if isinstance(saved, dict) and saved.get('version') == version and isinstance(saved.get('image'), str):
+            self.avatar_cache[key] = saved['image']
+            while len(self.avatar_cache) > 128: self.avatar_cache.popitem(last=False)
+            return {'image': saved['image'], 'pending': False}
         if self.settings["storagePaused"] or self.connection != "connected" or self.login_active():
             return {"image": None, "pending": False}
         if key not in self.avatar_tasks and len(self.avatar_tasks) < 64:
@@ -154,11 +185,14 @@ class DesktopProfiles:
             async def fetch():
                 result = None
                 try:
-                    async with self.avatar_slots: result = await self.avatar_fetcher(path)
+                    async with self.avatar_slots:
+                        result = await (download_raster(path) if self.provider == 'instagram' else self.avatar_fetcher(path))
                 except asyncio.CancelledError: raise
                 except Exception: pass
                 finally: self.avatar_tasks.pop(key, None)
                 if generation == self.avatar_generation and not self.settings["storagePaused"]:
+                    if result:
+                        self.db.profile_cache_put(self.provider, self.account_id, 'profile.v1.' + record.id, {'version': version, 'image': result})
                     self.avatar_cache[key] = result
                     while len(self.avatar_cache) > 128: self.avatar_cache.popitem(last=False)
             self.avatar_tasks[key] = asyncio.create_task(fetch())

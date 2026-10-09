@@ -1,0 +1,30 @@
+{
+  "version": "0.9.0",
+  "date": "2026-10-03",
+  "file": "BeeperLocal-0.9.0-AppleSilicon-beta.zip",
+  "size_bytes": 63068920,
+  "sha256": "bb0f1d6d364e4753d6ee980d895200b86d6822f36079eff19c431372041b205a",
+  "source_files": 783,
+  "source_archive_bytes": 3394150,
+  "checks": {
+    "zip_extraction_signature": true,
+    "executables_match_signed_build": 8,
+    "source_matches_current_files": true,
+    "embedded_source_assets": 23,
+    "native_line_objc_source_included": true,
+    "extracted_setup_helpers": true,
+    "extracted_runtime": {
+      "runtimeReady": true,
+      "mcp": true,
+      "xCrypto": true,
+      "version": "0.9.0"
+    },
+    "portable_path_contains_spaces": true,
+    "isolated_empty_home": true,
+    "os_path_only": true
+  },
+  "usual_app_replaced": false,
+  "real_messages_sent": 0,
+  "production_data_deleted": false,
+  "notarization": "not_performed"
+}

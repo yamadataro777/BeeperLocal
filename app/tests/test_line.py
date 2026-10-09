@@ -83,7 +83,7 @@ class NormalizationTests(unittest.TestCase):
             with self.assertRaises(AppError):
                 direct_mid(value)
     def test_unsupported_content_excluded(self):
-        for kind in [1, 2, 7, 13, 14]:
+        for kind in [2, 3, 13, 14]:
             self.assertIsNone(normalize_line(raw(content_type=kind), SELF, CONV))
     def test_bad_or_undecryptable_text_refused(self):
         for changes in [{"status": "decryption_failed"}, {"to": OTHER}, {"text": None},
@@ -136,7 +136,7 @@ class ConnectorTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(backend.calls), 1)
     async def test_watch_filters_other_chats_operations_media_and_closes(self):
         backend = FakeCLI(events=[event(chat_id=OTHER), event(event="operation", type=55),
-                                  event(message=raw(content_type=7)), event()])
+                                  event(message=raw(content_type=13)), event()])
         connector = LineConnector(store(), cli=backend)
         result = [m async for m in connector.watch()]
         self.assertEqual(len(result), 1)

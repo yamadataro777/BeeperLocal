@@ -1,0 +1,1048 @@
+// mautrix-twitter - A Matrix-Twitter puppeting bridge.
+// Copyright (C) 2025 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package connector
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"github.com/tidwall/gjson"
+	"go.mau.fi/util/exgjson"
+	"go.mau.fi/util/exstrings"
+	"go.mau.fi/util/ptr"
+	"go.mau.fi/util/variationselector"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/format"
+	"maunium.net/go/mautrix/id"
+
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/crypto"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/payload"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/response"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/types"
+)
+
+var (
+	_ bridgev2.ReactionHandlingNetworkAPI        = (*TwitterClient)(nil)
+	_ bridgev2.ReadReceiptHandlingNetworkAPI     = (*TwitterClient)(nil)
+	_ bridgev2.EditHandlingNetworkAPI            = (*TwitterClient)(nil)
+	_ bridgev2.TypingHandlingNetworkAPI          = (*TwitterClient)(nil)
+	_ bridgev2.ChatViewingNetworkAPI             = (*TwitterClient)(nil)
+	_ bridgev2.DeleteChatHandlingNetworkAPI      = (*TwitterClient)(nil)
+	_ bridgev2.RedactionHandlingNetworkAPI       = (*TwitterClient)(nil)
+	_ bridgev2.MembershipHandlingNetworkAPI      = (*TwitterClient)(nil)
+	_ bridgev2.MessageRequestAcceptingNetworkAPI = (*TwitterClient)(nil)
+	_ bridgev2.RoomAvatarHandlingNetworkAPI      = (*TwitterClient)(nil)
+	_ bridgev2.RoomNameHandlingNetworkAPI        = (*TwitterClient)(nil)
+	_ bridgev2.TagHandlingNetworkAPI             = (*TwitterClient)(nil)
+	_ bridgev2.MuteHandlingNetworkAPI            = (*TwitterClient)(nil)
+)
+
+var _ bridgev2.TransactionIDGeneratingNetwork = (*TwitterConnector)(nil)
+
+type messageSendMode int
+
+const (
+	messageSendREST messageSendMode = iota
+	messageSendXChatPlaintext
+	messageSendXChatEncrypted
+)
+
+func selectMessageSendMode(meta *PortalMetadata) messageSendMode {
+	if meta.CanUseXChat() {
+		return messageSendXChatEncrypted
+	} else if meta.IsXChatConversation() {
+		return messageSendXChatPlaintext
+	}
+	return messageSendREST
+}
+
+func (tc *TwitterClient) HandleMatrixTyping(ctx context.Context, msg *bridgev2.MatrixTyping) error {
+	if !msg.IsTyping || msg.Type != bridgev2.TypingTypeText {
+		return nil
+	}
+
+	conversationID := ParsePortalID(msg.Portal.ID)
+
+	if msg.Portal.Metadata.(*PortalMetadata).IsXChatConversation() {
+		return tc.client.SendXChatTypingNotification(ctx, conversationID)
+	}
+	return tc.client.SendTypingNotification(ctx, ConvertConversationIDToREST(conversationID))
+}
+
+func (tc *TwitterConnector) GenerateTransactionID(userID id.UserID, roomID id.RoomID, eventType event.Type) networkid.RawTransactionID {
+	return networkid.RawTransactionID(uuid.NewString())
+}
+
+func (tc *TwitterClient) HandleMatrixMessage(ctx context.Context, msg *bridgev2.MatrixMessage) (message *bridgev2.MatrixMessageResponse, err error) {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	content := msg.Content
+	sendMode := selectMessageSendMode(msg.Portal.Metadata.(*PortalMetadata))
+
+	text := content.Body
+	if content.Format == event.FormatHTML {
+		text = tc.matrixParser.Parse(content.FormattedBody, format.NewContext(ctx))
+	}
+
+	messageID := string(msg.InputTransactionID)
+	if messageID != "" {
+		if _, err := uuid.Parse(messageID); err != nil {
+			messageID = ""
+		}
+	}
+	if messageID == "" {
+		messageID = uuid.NewString()
+	}
+
+	opts := twittermeow.SendEncryptedMessageOpts{
+		ConversationID: conversationID,
+		MessageID:      messageID,
+		Text:           text,
+	}
+
+	if msg.ReplyTo != nil {
+		replySeqID := ParseMessageID(msg.ReplyTo.ID)
+		replyMsgID := replySeqID
+
+		// Get XChatClientMsgID from metadata (still stored for transaction ID matching)
+		var metaCopy MessageMetadata
+		if meta, ok := msg.ReplyTo.Metadata.(*MessageMetadata); ok && meta != nil {
+			metaCopy = *meta
+		}
+		if extra := tc.lookupReplyMetadata(ctx, msg.Portal.PortalKey, msg.ReplyTo.ID); extra != nil {
+			metaCopy.CopyFrom(extra)
+		}
+		if metaCopy.XChatClientMsgID != "" {
+			replyMsgID = metaCopy.XChatClientMsgID
+		}
+
+		replyText, replyDisplayName, replyAttachments, ok := tc.fetchReplyPreviewContent(ctx, msg.Portal, msg.ReplyTo, conversationID, replySeqID, sendMode)
+
+		// Get sender ID
+		var senderIDStr string
+		if msg.ReplyTo.SenderID != "" {
+			senderIDStr = ParseUserID(msg.ReplyTo.SenderID)
+		}
+
+		// Fallback for display name if fetch failed
+		if replyDisplayName == "" && senderIDStr != "" {
+			replyDisplayName = tc.getDisplayNameForUser(ctx, senderIDStr)
+			if replyDisplayName == "" {
+				replyDisplayName = senderIDStr
+			}
+		}
+
+		var senderIDPtr *int64
+		if senderIDStr != "" {
+			if parsed, err := strconv.ParseInt(senderIDStr, 10, 64); err == nil {
+				senderIDPtr = &parsed
+			} else {
+				zerolog.Ctx(ctx).Debug().
+					Str("raw_sender_id", senderIDStr).
+					Err(err).
+					Msg("Failed to parse sender_id for reply preview")
+			}
+		}
+		if replyMsgID == "" {
+			replyMsgID = replySeqID
+		}
+		opts.ReplyTo = buildReplyingToPreview(
+			replyMsgID,
+			replySeqID,
+			replyText,
+			replyDisplayName,
+			senderIDPtr,
+			replyAttachments,
+			ok,
+		)
+
+		if ok {
+			zerolog.Ctx(ctx).Info().
+				Str("conversation_id", conversationID).
+				Str("reply_to_id", ParseMessageID(msg.ReplyTo.ID)).
+				Int("reply_attachments", len(replyAttachments)).
+				Int("reply_text_length", len(replyText)).
+				Msg("Preparing reply preview")
+		} else {
+			zerolog.Ctx(ctx).Debug().
+				Str("reply_to_id", ParseMessageID(msg.ReplyTo.ID)).
+				Msg("Could not fetch reply content, sending reply with target identifiers only")
+		}
+	}
+
+	switch content.MsgType {
+	case event.MsgText:
+		// nothing extra
+	case event.MsgVideo, event.MsgImage, event.MsgAudio:
+		if content.FileName != "" && (content.Body == content.FileName || content.Body == "") {
+			opts.Text = ""
+		}
+
+		if sendMode != messageSendREST {
+			data, err := tc.connector.br.Bot.DownloadMedia(ctx, content.URL, content.File)
+			if err != nil {
+				return nil, err
+			}
+
+			mimeType := content.Info.MimeType
+			// Convert audio to mp4 if needed
+			if content.MsgType == event.MsgAudio && mimeType != "video/mp4" {
+				converted, err := tc.client.ConvertAudioPayload(ctx, data, mimeType)
+				if err != nil {
+					return nil, err
+				}
+				data = converted
+				mimeType = "video/mp4"
+			}
+
+			attType := payload.MediaTypeImage
+			switch content.MsgType {
+			case event.MsgVideo:
+				attType = payload.MediaTypeVideo
+			case event.MsgAudio:
+				attType = payload.MediaTypeAudio
+			}
+			width := int64(content.Info.Width)
+			height := int64(content.Info.Height)
+			size := int64(len(data))
+
+			if sendMode == messageSendXChatEncrypted {
+				uploadResult, err := tc.client.UploadXChatMedia(ctx, conversationID, messageID, data)
+				if err != nil {
+					return nil, err
+				}
+
+				zerolog.Ctx(ctx).Debug().
+					Str("media_hash_key", uploadResult.MediaHashKey).
+					Msg("Successfully uploaded encrypted media to XChat")
+
+				opts.Attachments = append(opts.Attachments, &payload.MessageAttachment{
+					Media: &payload.MediaAttachment{
+						MediaHashKey: &uploadResult.MediaHashKey,
+						Type:         ptr.Ptr(int32(attType)),
+						Dimensions: &payload.MediaDimensions{
+							Width:  &width,
+							Height: &height,
+						},
+						FilesizeBytes: &size,
+						Filename:      ptr.Ptr(content.FileName),
+					},
+				})
+			} else {
+				mediaCategory := payload.MEDIA_CATEGORY_DM_IMAGE
+				switch content.MsgType {
+				case event.MsgVideo, event.MsgAudio:
+					mediaCategory = payload.MEDIA_CATEGORY_DM_VIDEO
+				default:
+					if mimeType == "image/gif" || content.Info.MauGIF {
+						mediaCategory = payload.MEDIA_CATEGORY_DM_GIF
+					}
+				}
+				uploadResult, err := tc.client.UploadMedia(ctx, &payload.UploadMediaQuery{
+					MediaType:     mimeType,
+					MediaCategory: mediaCategory,
+				}, data)
+				if err != nil {
+					return nil, err
+				}
+				size = int64(uploadResult.Size)
+				opts.Attachments = append(opts.Attachments, &payload.MessageAttachment{
+					Media: &payload.MediaAttachment{
+						MediaHashKey: &uploadResult.MediaKey,
+						Type:         ptr.Ptr(int32(attType)),
+						Dimensions: &payload.MediaDimensions{
+							Width:  &width,
+							Height: &height,
+						},
+						FilesizeBytes: &size,
+						Filename:      ptr.Ptr(content.FileName),
+						AttachmentId:  &uploadResult.MediaIDString,
+					},
+				})
+			}
+		}
+	default:
+		return nil, fmt.Errorf("%w %s", bridgev2.ErrUnsupportedMessageType, content.MsgType)
+	}
+
+	if opts.Text != "" {
+		urlAttachments, urlEntities := buildURLAttachments(opts.Text)
+		if len(urlAttachments) > 0 {
+			opts.Attachments = append(opts.Attachments, urlAttachments...)
+		}
+		if len(urlEntities) > 0 {
+			opts.Entities = append(opts.Entities, urlEntities...)
+		}
+		mentionEntities := buildMentionEntities(opts.Text)
+		if len(mentionEntities) > 0 {
+			opts.Entities = append(opts.Entities, mentionEntities...)
+		}
+	}
+
+	dbMsg := &database.Message{
+		ID:        networkid.MessageID(messageID),
+		SenderID:  MakeUserID(ParseUserLoginID(tc.userLogin.ID)),
+		Timestamp: time.Now(),
+		Metadata: &MessageMetadata{
+			XChatClientMsgID: messageID,
+		},
+	}
+	txnID := networkid.TransactionID(messageID)
+	if sendMode == messageSendREST {
+		return tc.sendDirectMessageREST(ctx, msg, conversationID, messageID, text, opts, dbMsg, txnID)
+	}
+
+	// The mutation response includes the real XChat sequence ID, so ignore the
+	// later remote echo instead of leaving the send pending.
+	msg.AddPendingToIgnore(txnID)
+
+	var resp *response.SendMessageMutationResponse
+	if sendMode == messageSendXChatPlaintext {
+		resp, err = tc.client.SendUnencryptedMessage(ctx, opts)
+	} else {
+		resp, err = tc.client.SendEncryptedMessage(ctx, opts)
+	}
+	if err != nil {
+		msg.RemovePending(txnID)
+		if sendMode == messageSendXChatEncrypted && errors.Is(err, crypto.ErrKeyNotFound) {
+			zerolog.Ctx(ctx).Debug().
+				Str("conversation_id", conversationID).
+				Msg("Falling back to REST API for message send (key/token not found)")
+			return tc.sendDirectMessageREST(ctx, msg, conversationID, messageID, text, opts, dbMsg, txnID)
+		}
+		return nil, bridgev2.WrapErrorInStatus(err).WithSendNotice(true)
+	}
+	zerolog.Ctx(ctx).Debug().
+		Str("conversation_id", conversationID).
+		Str("message_id", messageID).
+		Any("response", resp).
+		Msg("XChat send message response")
+
+	if resp == nil || resp.Data.XChatSendCreateMessageEvent.EncodedMessageEvent == "" {
+		msg.RemovePending(txnID)
+		return nil, bridgev2.WrapErrorInStatus(errors.New("XChat send message response did not include an encoded message event")).WithSendNotice(true).WithErrorAsMessage()
+	}
+	evt, err := twittermeow.DecodeSendMessageMutationMessageEvent(resp.Data.XChatSendCreateMessageEvent.EncodedMessageEvent)
+	if err != nil {
+		zerolog.Ctx(ctx).Debug().
+			Err(err).
+			Str("conversation_id", conversationID).
+			Str("message_id", messageID).
+			Msg("Failed to decode XChat send message response")
+		msg.RemovePending(txnID)
+		return nil, bridgev2.WrapErrorInStatus(fmt.Errorf("failed to decode XChat send message response: %w", err)).WithSendNotice(true).WithErrorAsMessage()
+	} else if evt != nil && evt.Detail != nil && evt.Detail.MessageFailureEvent != nil {
+		msg.RemovePending(txnID)
+		return nil, bridgev2.WrapErrorInStatus(errors.New(xchatSendFailureMessage(evt.Detail.MessageFailureEvent))).
+			WithStatus(event.MessageStatusFail).
+			WithIsCertain(true).
+			WithSendNotice(true).
+			WithErrorAsMessage()
+	} else if evt != nil && evt.SequenceId != nil && *evt.SequenceId != "" {
+		zerolog.Ctx(ctx).Debug().
+			Str("conversation_id", conversationID).
+			Str("message_id", messageID).
+			Msg("Decoded XChat send message event")
+		dbMsg.ID = MakeMessageID(*evt.SequenceId)
+	} else {
+		msg.RemovePending(txnID)
+		return nil, bridgev2.WrapErrorInStatus(errors.New("XChat send message response did not include a message ID")).WithSendNotice(true).WithErrorAsMessage()
+	}
+
+	return &bridgev2.MatrixMessageResponse{
+		DB:            dbMsg,
+		RemovePending: txnID,
+	}, nil
+}
+
+func buildReplyingToPreview(
+	messageID string,
+	sequenceID string,
+	text string,
+	displayName string,
+	senderID *int64,
+	attachments []*payload.MessageAttachment,
+	includeContent bool,
+) *payload.ReplyingToPreview {
+	preview := &payload.ReplyingToPreview{
+		ReplyingToMessageId:         ptr.Ptr(messageID),
+		ReplyingToMessageSequenceId: ptr.Ptr(sequenceID),
+		SenderId:                    senderID,
+	}
+	if displayName != "" {
+		preview.SenderDisplayName = ptr.Ptr(displayName)
+	}
+	if includeContent {
+		preview.MessageText = ptr.Ptr(text)
+		preview.Attachments = attachments
+	}
+	return preview
+}
+
+func xchatSendFailureMessage(failure *payload.MessageFailureEvent) string {
+	switch payload.FailureType(ptr.Val(failure.FailureType)) {
+	case payload.FailureTypeInvalidSenderSignature:
+		return "X rejected this message: invalid sender signature"
+	case payload.FailureTypeContentsTooLarge:
+		return "X rejected this message: contents too large"
+	case payload.FailureTypeRecipientHasNotTrustedConversation:
+		return "X rejected this message: recipient has not trusted this conversation"
+	case payload.FailureTypeInvalidSignatureVersion:
+		return "X rejected this message: invalid signature version"
+	case payload.FailureTypeSignatureVerificationFailed:
+		return "X rejected this message: signature verification failed"
+	default:
+		return fmt.Sprintf("X rejected this message: failure type %d", ptr.Val(failure.FailureType))
+	}
+}
+
+// sendDirectMessageREST sends a message via the REST API for conversations
+// that have not been observed on XChat.
+func (tc *TwitterClient) sendDirectMessageREST(
+	ctx context.Context,
+	msg *bridgev2.MatrixMessage,
+	conversationID string,
+	messageID string,
+	text string,
+	opts twittermeow.SendEncryptedMessageOpts,
+	dbMsg *database.Message,
+	_ networkid.TransactionID,
+) (*bridgev2.MatrixMessageResponse, error) {
+	conversationID = ConvertConversationIDToREST(conversationID)
+	log := zerolog.Ctx(ctx)
+	log.Debug().
+		Str("conversation_id", conversationID).
+		Str("message_id", messageID).
+		Msg("Sending message via REST API (legacy conversation)")
+
+	pl := &payload.SendDirectMessagePayload{
+		ConversationID: conversationID,
+		RequestID:      messageID,
+		Text:           opts.Text,
+		CardsPlatform:  "Web-12",
+		IncludeCards:   1,
+	}
+
+	// Handle replies for REST API
+	if opts.ReplyTo != nil && opts.ReplyTo.ReplyingToMessageSequenceId != nil {
+		pl.ReplyToDMID = *opts.ReplyTo.ReplyingToMessageSequenceId
+	}
+
+	// Handle media attachments for REST API
+	content := msg.Content
+	switch content.MsgType {
+	case event.MsgVideo, event.MsgImage, event.MsgAudio:
+		data, err := tc.connector.br.Bot.DownloadMedia(ctx, content.URL, content.File)
+		if err != nil {
+			return nil, err
+		}
+
+		mimeType := content.Info.MimeType
+		// Convert audio to mp4 if needed
+		if content.MsgType == event.MsgAudio && mimeType != "video/mp4" {
+			converted, err := tc.client.ConvertAudioPayload(ctx, data, mimeType)
+			if err != nil {
+				return nil, err
+			}
+			data = converted
+			mimeType = "video/mp4"
+		}
+
+		// Determine media category for REST API
+		var mediaCategory payload.MediaCategory
+		switch content.MsgType {
+		case event.MsgVideo, event.MsgAudio:
+			mediaCategory = payload.MEDIA_CATEGORY_DM_VIDEO
+			if content.MsgType == event.MsgAudio {
+				pl.AudioOnlyMediaAttachment = true
+			}
+		default:
+			mediaCategory = payload.MEDIA_CATEGORY_DM_IMAGE
+			if mimeType == "image/gif" || content.Info.MauGIF {
+				mediaCategory = payload.MEDIA_CATEGORY_DM_GIF
+			}
+		}
+
+		// Upload media using non-encrypted flow for REST API
+		uploadQuery := &payload.UploadMediaQuery{
+			MediaType:     mimeType,
+			MediaCategory: mediaCategory,
+		}
+		uploadResult, err := tc.client.UploadMedia(ctx, uploadQuery, data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to upload media for REST API: %w", err)
+		}
+
+		pl.MediaID = uploadResult.MediaIDString
+		log.Debug().
+			Str("media_id", uploadResult.MediaIDString).
+			Msg("Successfully uploaded media for REST API")
+	}
+
+	resp, err := tc.client.SendDirectMessage(ctx, pl)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the message ID from the response
+	if resp != nil && len(resp.Entries) > 0 {
+		for _, entry := range resp.Entries {
+			parsed := entry.ParseWithErrorLog(log)
+			if msgEvt, ok := parsed.(*types.Message); ok && msgEvt.ConversationID == conversationID {
+				dbMsg.ID = MakeMessageID(msgEvt.ID)
+				break
+			}
+		}
+	}
+
+	return &bridgev2.MatrixMessageResponse{
+		DB: dbMsg,
+	}, nil
+}
+
+// lookupReplyMetadata fetches message metadata for a given message ID across all parts and merges them.
+func (tc *TwitterClient) lookupReplyMetadata(ctx context.Context, portalKey networkid.PortalKey, msgID networkid.MessageID) *MessageMetadata {
+	msgs, err := tc.connector.br.DB.Message.GetAllPartsByID(ctx, portalKey.Receiver, msgID)
+	if err != nil {
+		zerolog.Ctx(ctx).Debug().
+			Err(err).
+			Str("conversation_id", ParsePortalID(portalKey.ID)).
+			Str("reply_to_id", ParseMessageID(msgID)).
+			Msg("Failed to load reply target metadata from DB")
+		return nil
+	}
+	var merged MessageMetadata
+	for _, m := range msgs {
+		if meta, ok := m.Metadata.(*MessageMetadata); ok && meta != nil {
+			merged.CopyFrom(meta)
+		}
+	}
+	return &merged
+}
+
+// fetchReplyInfoFromMatrix fetches reply text and sender display name from the Matrix event.
+// Returns (messageText, senderDisplayName, attachments, ok).
+// If GetEvent fails or the event can't be parsed, returns empty values with ok=false.
+// The caller should send without reply metadata when ok=false.
+func (tc *TwitterClient) fetchReplyInfoFromMatrix(ctx context.Context, portal *bridgev2.Portal, replyTo *database.Message) (text string, displayName string, attachments []*payload.MessageAttachment, ok bool) {
+	if replyTo == nil || replyTo.MXID == "" {
+		return "", "", nil, false
+	}
+
+	log := zerolog.Ctx(ctx)
+
+	evt, err := tc.connector.br.Bot.GetEvent(ctx, portal.MXID, replyTo.MXID)
+	if err != nil {
+		log.Debug().
+			Err(err).
+			Stringer("event_id", replyTo.MXID).
+			Msg("Failed to fetch Matrix event for reply, will send without reply metadata")
+		return "", "", nil, false
+	}
+
+	content, _ := evt.Content.Parsed.(*event.MessageEventContent)
+	if content == nil {
+		return "", "", nil, false
+	}
+
+	// Get message text
+	messageText := content.Body
+
+	// Get sender display name
+	var senderDisplayName string
+	// Try to get from ghost
+	if networkUserID, ok := tc.connector.br.Matrix.ParseGhostMXID(evt.Sender); ok {
+		ghost, err := tc.connector.br.GetGhostByID(ctx, networkUserID)
+		if err == nil && ghost != nil && ghost.Name != "" {
+			senderDisplayName = ghost.Name
+		}
+	}
+	// Fallback to network user lookup
+	if senderDisplayName == "" && replyTo.SenderID != "" {
+		senderDisplayName = tc.getDisplayNameForUser(ctx, ParseUserID(replyTo.SenderID))
+	}
+
+	// Build attachments from Matrix media
+	if content.MsgType.IsMedia() {
+		attachments = findAttachmentsFromMatrixContent(evt.Content.VeryRaw)
+	}
+
+	return messageText, senderDisplayName, attachments, true
+}
+
+func (tc *TwitterClient) fetchReplyPreviewContent(ctx context.Context, portal *bridgev2.Portal, replyTo *database.Message, conversationID, replySeqID string, sendMode messageSendMode) (text string, displayName string, attachments []*payload.MessageAttachment, ok bool) {
+	text, displayName, attachments, ok = tc.fetchReplyInfoFromMatrix(ctx, portal, replyTo)
+	if ok || sendMode == messageSendREST {
+		return
+	}
+	original, err := tc.fetchOriginalXChatMessage(ctx, conversationID, replySeqID)
+	if err != nil {
+		zerolog.Ctx(ctx).Debug().Err(err).
+			Str("reply_to_id", replySeqID).
+			Msg("Could not fetch XChat reply target content")
+		return
+	}
+	return original.Text, displayName, original.OriginalAttachments, true
+}
+
+func findAttachmentsFromMatrixContent(rawContent json.RawMessage) []*payload.MessageAttachment {
+	res := gjson.GetBytes(rawContent, exgjson.Path("com.beeper.xchat.original_attachments"))
+	if !res.IsObject() {
+		return nil
+	}
+	var attachments []*payload.MessageAttachment
+	err := json.Unmarshal(exstrings.UnsafeBytes(res.Raw), &attachments)
+	if err != nil {
+		return nil
+	}
+	return attachments
+}
+
+func (tc *TwitterClient) HandleMatrixReactionRemove(ctx context.Context, msg *bridgev2.MatrixReactionRemove) error {
+	var senderID string
+	if msg.TargetReaction != nil {
+		senderID = ParseUserID(msg.TargetReaction.SenderID)
+	}
+	conversationID := ParsePortalID(msg.Portal.ID)
+	targetMessageID := ParseMessageID(msg.TargetReaction.MessageID)
+
+	emoji := msg.TargetReaction.Emoji
+	if emoji == "" {
+		emoji = string(msg.TargetReaction.EmojiID)
+	}
+	emoji = variationselector.FullyQualify(emoji)
+	zerolog.Ctx(ctx).Info().
+		Str("conversation_id", conversationID).
+		Str("target_message_id", targetMessageID).
+		Str("emoji", emoji).
+		Str("sender_id", senderID).
+		Stringer("sender_mxid", msg.Event.Sender).
+		Msg("Handling Matrix reaction removal")
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	return tc.doHandleMatrixReaction(ctx, true, meta, conversationID, targetMessageID, emoji)
+}
+
+func (tc *TwitterClient) PreHandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (bridgev2.MatrixReactionPreResponse, error) {
+	emoji := variationselector.FullyQualify(msg.Content.RelatesTo.Key)
+	return bridgev2.MatrixReactionPreResponse{
+		SenderID: MakeUserID(tc.client.GetCurrentUserID()),
+		EmojiID:  networkid.EmojiID(emoji),
+		Emoji:    emoji,
+	}, nil
+}
+
+func (tc *TwitterClient) HandleMatrixReaction(ctx context.Context, msg *bridgev2.MatrixReaction) (reaction *database.Reaction, err error) {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	targetMessageID := ParseMessageID(msg.TargetMessage.ID)
+
+	emoji := msg.PreHandleResp.Emoji
+	meta := msg.Portal.Metadata.(*PortalMetadata)
+	if err := tc.doHandleMatrixReaction(ctx, false, meta, conversationID, targetMessageID, emoji); err != nil {
+		return nil, err
+	}
+
+	return &database.Reaction{}, nil
+}
+
+func (tc *TwitterClient) doHandleMatrixReaction(ctx context.Context, remove bool, meta *PortalMetadata, conversationID, messageID, emoji string) error {
+	emoji = variationselector.FullyQualify(emoji)
+	if meta == nil || !meta.CanUseXChat() {
+		reactionPayload := &payload.ReactionActionPayload{
+			ConversationID: ConvertConversationIDToREST(conversationID),
+			MessageID:      messageID,
+			ReactionTypes:  []string{"Emoji"},
+			EmojiReactions: []string{emoji},
+		}
+		reactionResponse, err := tc.client.React(ctx, reactionPayload, remove)
+		if err != nil {
+			return err
+		}
+		tc.client.Logger.Debug().
+			Any("reactionResponse", reactionResponse).
+			Any("payload", reactionPayload).
+			Msg("Reaction response")
+		if !remove && reactionResponse.Data.CreateDmReaction.Typename == "CreateDMReactionFailure" {
+			return fmt.Errorf("server rejected reaction")
+		}
+		if remove && reactionResponse.Data.DeleteDmReaction.Typename == "DeleteDMReactionFailure" {
+			return fmt.Errorf("server rejected reaction removal")
+		}
+		return nil
+	}
+
+	// XChat reactions are sent as encrypted MessageCreateEvents (reaction_add/reaction_remove).
+	xchatConvID := NormalizeConversationID(conversationID)
+	_, err := tc.client.SendEncryptedReaction(ctx, xchatConvID, messageID, emoji, remove)
+	return err
+}
+
+func matrixReadReceiptTimes(msg *bridgev2.MatrixReadReceipt) (readUpTo, readAt time.Time) {
+	readUpTo = msg.ReadUpTo
+	if readUpTo.IsZero() {
+		readUpTo = msg.Receipt.Timestamp
+	}
+	readAt = msg.Receipt.Timestamp
+	if readAt.IsZero() {
+		readAt = time.Now()
+	}
+	return readUpTo, readAt
+}
+
+func (tc *TwitterClient) HandleMatrixReadReceipt(ctx context.Context, msg *bridgev2.MatrixReadReceipt) error {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	readUpTo, readAt := matrixReadReceiptTimes(msg)
+
+	canUseXChat := msg.Portal.Metadata.(*PortalMetadata).CanUseXChat()
+	isAllDigits := func(s string) bool {
+		if s == "" {
+			return false
+		}
+		for i := 0; i < len(s); i++ {
+			if s[i] < '0' || s[i] > '9' {
+				return false
+			}
+		}
+		return true
+	}
+
+	log := zerolog.Ctx(ctx)
+	log.Debug().
+		Str("conversation_id", conversationID).
+		Str("portal_id", string(msg.Portal.ID)).
+		Str("event_id", msg.EventID.String()).
+		Bool("can_use_xchat", canUseXChat).
+		Bool("implicit", msg.Implicit).
+		Time("read_up_to", readUpTo).
+		Time("read_at", readAt).
+		Msg("Handling Matrix read receipt")
+
+	lastReadEventID := ""
+	if msg.ExactMessage != nil {
+		candidate := ParseMessageID(msg.ExactMessage.ID)
+		// XChat read receipts require a sequence ID; local echo message IDs can be UUIDs.
+		if candidate != "" && (!canUseXChat || isAllDigits(candidate)) {
+			lastReadEventID = candidate
+		}
+	}
+	if lastReadEventID == "" && msg.EventID != "" {
+		// If ExactMessage is nil (or not usable), try resolving the target by MXID.
+		dbMsg, err := tc.userLogin.Bridge.DB.Message.GetPartByMXID(ctx, msg.EventID)
+		if err != nil {
+			return err
+		}
+		if dbMsg != nil {
+			candidate := ParseMessageID(dbMsg.ID)
+			if candidate != "" && (!canUseXChat || isAllDigits(candidate)) {
+				lastReadEventID = candidate
+			}
+		}
+	}
+	if lastReadEventID == "" {
+		var (
+			lastMessage *database.Message
+			err         error
+		)
+		if !canUseXChat {
+			lastMessage, err = tc.userLogin.Bridge.DB.Message.GetLastPartAtOrBeforeTime(ctx, msg.Portal.PortalKey, readUpTo)
+			if err != nil {
+				return err
+			}
+			if lastMessage == nil {
+				return nil
+			}
+			lastReadEventID = ParseMessageID(lastMessage.ID)
+		} else {
+			// For XChat, we must choose a numeric sequence ID. Timestamp-based queries can pick
+			// local-echo/transaction placeholder messages, so scan recent history for a sequence ID.
+			const scanN = 200
+			recent, err := tc.userLogin.Bridge.DB.Message.GetLastNInPortal(ctx, msg.Portal.PortalKey, scanN)
+			if err != nil {
+				return err
+			}
+			for _, m := range recent {
+				if m == nil || m.Timestamp.After(readUpTo) {
+					continue
+				}
+				candidate := ParseMessageID(m.ID)
+				if isAllDigits(candidate) {
+					lastReadEventID = candidate
+					break
+				}
+			}
+		}
+	}
+	if lastReadEventID == "" {
+		log.Debug().
+			Str("conversation_id", conversationID).
+			Bool("can_use_xchat", canUseXChat).
+			Time("read_up_to", readUpTo).
+			Msg("Not sending read receipt: no suitable target message found")
+		return nil
+	}
+
+	log.Debug().
+		Str("conversation_id", conversationID).
+		Bool("can_use_xchat", canUseXChat).
+		Str("last_read_event_id", lastReadEventID).
+		Bool("last_read_event_id_is_numeric", isAllDigits(lastReadEventID)).
+		Time("read_up_to", readUpTo).
+		Time("read_at", readAt).
+		Msg("Sending read receipt")
+
+	// Check portal metadata for encryption capability
+	if !canUseXChat {
+		// No encryption keys - use REST API
+		params := &payload.MarkConversationReadQuery{
+			ConversationID:  ConvertConversationIDToREST(conversationID),
+			LastReadEventID: lastReadEventID,
+		}
+		return tc.client.MarkConversationRead(ctx, params)
+	}
+
+	// Encrypted conversation - use XChat, with REST fallback on key not found
+	xchatErr := tc.client.SendXChatReadReceipt(ctx, conversationID, lastReadEventID, readAt)
+	if xchatErr != nil {
+		if errors.Is(xchatErr, crypto.ErrKeyNotFound) || errors.Is(xchatErr, twittermeow.ErrXChatWebsocketNotConnected) {
+			params := &payload.MarkConversationReadQuery{
+				ConversationID:  ConvertConversationIDToREST(conversationID),
+				LastReadEventID: lastReadEventID,
+			}
+			return tc.client.MarkConversationRead(ctx, params)
+		}
+		return xchatErr
+	}
+
+	return nil
+}
+
+func (tc *TwitterClient) HandleMatrixEdit(ctx context.Context, edit *bridgev2.MatrixEdit) error {
+	portalMeta := edit.Portal.Metadata.(*PortalMetadata)
+
+	// Editing is only supported for encrypted XChat conversations
+	if !portalMeta.CanUseXChat() {
+		return errors.New("editing is not supported for unencrypted conversations")
+	}
+
+	targetMessageID := ParseMessageID(edit.EditTarget.ID)
+	conversationID := ParsePortalID(edit.Portal.ID)
+
+	var meta *MessageMetadata
+	if edit.EditTarget != nil {
+		if typedMeta, ok := edit.EditTarget.Metadata.(*MessageMetadata); ok {
+			meta = typedMeta
+		}
+	}
+
+	messageID := string(edit.InputTransactionID)
+	if messageID == "" {
+		messageID = uuid.NewString()
+	}
+
+	resp, err := tc.client.SendEncryptedEdit(ctx, twittermeow.SendEncryptedEditOpts{
+		ConversationID:          conversationID,
+		MessageID:               messageID,
+		TargetMessageSequenceID: targetMessageID,
+		UpdatedText:             edit.Content.Body,
+	})
+	if err != nil {
+		return err
+	}
+	tc.client.Logger.Debug().Any("editResponse", resp).Msg("XChat edit response")
+	if meta != nil {
+		meta.EditCount++
+	}
+	return nil
+}
+
+func (tc *TwitterClient) HandleMatrixViewingChat(ctx context.Context, chat *bridgev2.MatrixViewingChat) error {
+	conversationID := ""
+	if chat.Portal != nil {
+		conversationID = ParsePortalID(chat.Portal.ID)
+	}
+	tc.client.SetActiveConversation(ConvertConversationIDToREST(conversationID))
+	return nil
+}
+
+func (tc *TwitterClient) HandleMatrixDeleteChat(ctx context.Context, chat *bridgev2.MatrixDeleteChat) error {
+	if chat.Content.DeleteForEveryone {
+		return errors.New("delete for everyone is not supported")
+	}
+	conversationID := ParsePortalID(chat.Portal.ID)
+
+	xchatErr := tc.client.DeleteXChatConversation(ctx, conversationID)
+	if xchatErr == nil {
+		return nil
+	}
+
+	reqQuery := payload.DMRequestQuery{}.Default()
+	return tc.client.DeleteConversation(ctx, ConvertConversationIDToREST(conversationID), &reqQuery)
+}
+
+func (tc *TwitterClient) HandleMatrixMessageRemove(ctx context.Context, msg *bridgev2.MatrixMessageRemove) error {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	if msg.TargetMessage == nil {
+		return errors.New("target message not found")
+	}
+
+	sequenceID := ParseMessageID(msg.TargetMessage.ID)
+	if sequenceID == "" {
+		return errors.New("message sequence ID not found")
+	}
+
+	// Unencrypted conversations only support delete-for-self through the legacy API.
+	if !msg.Portal.Metadata.(*PortalMetadata).CanUseXChat() {
+		_, err := tc.client.DeleteMessageForMe(ctx, &payload.DMMessageDeleteMutationVariables{
+			MessageID: sequenceID,
+		})
+		return err
+	}
+
+	return tc.client.DeleteXChatMessage(ctx, xchatMessageRemovalOpts(conversationID, sequenceID))
+}
+
+// Beeper handles delete-for-self locally, so a Matrix redaction always means delete for everyone.
+func xchatMessageRemovalOpts(conversationID, sequenceID string) twittermeow.DeleteXChatMessageOpts {
+	return twittermeow.DeleteXChatMessageOpts{
+		ConversationID: conversationID,
+		SequenceIDs:    []string{sequenceID},
+		DeleteForAll:   true,
+	}
+}
+
+func (tc *TwitterClient) HandleMatrixRoomAvatar(ctx context.Context, msg *bridgev2.MatrixRoomAvatar) (bool, error) {
+	if msg.Portal.RoomType == database.RoomTypeDM {
+		return false, errors.New("cannot set room avatar for DM")
+	}
+
+	if msg.Content.URL != "" || msg.Content.MSC3414File != nil {
+		data, err := msg.Portal.Bridge.Bot.DownloadMedia(ctx, msg.Content.URL, msg.Content.MSC3414File)
+		if err != nil {
+			return false, fmt.Errorf("failed to download avatar: %w", err)
+		}
+
+		var mediaType string
+		if msg.Content.Info != nil {
+			mediaType = msg.Content.Info.MimeType
+		} else {
+			mediaType = http.DetectContentType(data)
+		}
+
+		uploadMediaParams := &payload.UploadMediaQuery{
+			MediaType: mediaType,
+		}
+		uploadedMediaResponse, err := tc.client.UploadMedia(ctx, uploadMediaParams, data)
+		if err != nil {
+			return false, err
+		}
+
+		updateAvatarParams := &payload.DMRequestQuery{
+			AvatarID: uploadedMediaResponse.MediaIDString,
+		}
+		err = tc.client.UpdateConversationAvatar(ctx, ParsePortalID(msg.Portal.ID), updateAvatarParams)
+		if err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, errors.New("avatar not found")
+}
+
+func (tc *TwitterClient) HandleMatrixRoomName(ctx context.Context, msg *bridgev2.MatrixRoomName) (bool, error) {
+	if msg.Portal.RoomType == database.RoomTypeDM {
+		return false, errors.New("cannot set room name for DM")
+	}
+
+	updateNameParams := &payload.DMRequestQuery{
+		Name: msg.Content.Name,
+	}
+	err := tc.client.UpdateConversationName(ctx, ParsePortalID(msg.Portal.ID), updateNameParams)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (tc *TwitterClient) HandleMatrixMembership(ctx context.Context, msg *bridgev2.MatrixMembershipChange) (*bridgev2.MatrixMembershipResult, error) {
+	if msg.Type != bridgev2.Invite {
+		return nil, errors.New("unsupported membership change type")
+	}
+	if msg.Portal.RoomType == database.RoomTypeDM {
+		return nil, errors.New("cannot change members for DM")
+	}
+
+	var participantID string
+	switch target := msg.Target.(type) {
+	case *bridgev2.Ghost:
+		participantID = ParseUserID(target.ID)
+	case *bridgev2.UserLogin:
+		participantID = ParseUserLoginID(target.ID)
+	}
+	_, err := tc.client.AddParticipants(ctx, &payload.AddParticipantsPayload{
+		ConversationID:    ParsePortalID(msg.Portal.ID),
+		AddedParticipants: []string{participantID},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &bridgev2.MatrixMembershipResult{}, nil
+}
+
+func (tc *TwitterClient) HandleRoomTag(ctx context.Context, msg *bridgev2.MatrixRoomTag) error {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	_, isFavourite := msg.Content.Tags[event.RoomTagFavourite]
+
+	if isFavourite {
+		return tc.client.SendXChatPinConversation(ctx, conversationID)
+	}
+	return tc.client.SendXChatUnpinConversation(ctx, conversationID)
+}
+
+func (tc *TwitterClient) HandleMute(ctx context.Context, msg *bridgev2.MatrixMute) error {
+	conversationID := ParsePortalID(msg.Portal.ID)
+	if msg.Content.IsMuted() {
+		return tc.client.MuteConversation(ctx, conversationID)
+	}
+	return tc.client.UnmuteConversation(ctx, conversationID)
+}
+
+func (tc *TwitterClient) HandleMatrixAcceptMessageRequest(ctx context.Context, msg *bridgev2.MatrixAcceptMessageRequest) error {
+	err := tc.client.AcceptConversation(ctx, ParsePortalID(msg.Portal.ID))
+	// Already-accepted conversations will throw a 279 error when trying to accept again.
+	// TODO maybe check that the conversation actually exists on the xchat side?
+	if errors.Is(err, twittermeow.ErrConversationDoesntExist) {
+		err = nil
+	}
+	if err == nil && msg != nil && msg.Portal != nil {
+		_, ok := msg.Portal.Metadata.(*PortalMetadata)
+		if ok {
+			chatInfo := &bridgev2.ChatInfo{}
+			applyXChatTrustToChatInfo(chatInfo, true)
+			msg.Portal.UpdateInfo(ctx, chatInfo, tc.userLogin, nil, time.Time{})
+		}
+	}
+	return err
+}

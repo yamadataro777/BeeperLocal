@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 test('Slack user conversations, polling scope, send and draft isolation', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Slackテスト（架空）' })).toBeVisible();
   await expect(page.locator('.chat-person')).toContainText('定期取得待機中');
-  await expect(page.locator('.history-scope')).toContainText('スレッドはMCPから個別取得');
+  await expect(page.locator('.history-scope')).toContainText('サービスの保存期間・取得権限の範囲');
   const composer = page.getByRole('textbox', { name: 'メッセージ', exact: true });
   await composer.fill('Slackだけの架空送信');
   await page.getByRole('button', { name: '送信', exact: true }).dblclick();

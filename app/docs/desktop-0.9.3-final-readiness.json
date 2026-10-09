@@ -1,0 +1,81 @@
+{
+  "version": "0.9.3",
+  "date": "2026-10-03",
+  "scope": "friend_beta_all_five_services",
+  "sha256": "0d531c4c367d0a38ecb253dd4bf80144c020eca44dfc0e7e287f5604f5196d4f",
+  "checksum_matches": true,
+  "signature": {
+    "passed": true,
+    "exit_code": 0
+  },
+  "gatekeeper": {
+    "passed": false,
+    "exit_code": 3,
+    "reason": "Unnotarized Developer ID"
+  },
+  "notarization": {
+    "passed": false,
+    "exit_code": 65
+  },
+  "frozen_slack_oauth_configured": false,
+  "automatic_updates_configured": false,
+  "instagram_native_window_audit": {
+    "official_verification_screen_observed": true,
+    "agent_entered_credentials": false,
+    "credentials_saved": false,
+    "session_import_attempted": false,
+    "result": {
+      "exit": 0,
+      "cancelled": true,
+      "login_completed": false
+    }
+  },
+  "friend_all_five_services_ready": false,
+  "blocking_items": [
+    "Gatekeeper rejects unnotarized candidate",
+    "Bundled Slack public OAuth client is absent",
+    "No end-to-end onboarding and live send/receive acceptance for all five services on a fresh Mac"
+  ],
+  "tested_package_changed": false,
+  "five_service_assessment": {
+    "line": {
+      "fresh_mac_login": "not_verified",
+      "revoked_session_handling": "fixture_verified",
+      "coexistence_with_beeper_or_chrome": "unsupported"
+    },
+    "instagram": {
+      "native_verification_screen": "observed",
+      "verification_completion": "not_verified",
+      "new_session_save_and_reconnect": "fixture_only"
+    },
+    "slack": {
+      "fresh_login": "blocked_unconfigured_public_client",
+      "existing_saved_account": "separate_from_fresh_onboarding"
+    },
+    "x": {
+      "prior_account_history": "previous_version_evidence",
+      "fresh_mac_end_to_end": "not_verified"
+    },
+    "messenger": {
+      "prior_receive_path": "previous_version_evidence",
+      "fresh_mac_end_to_end_and_new_send_path": "not_verified"
+    }
+  },
+  "minimum_acceptance": [
+    "Notarized final artifact passes Gatekeeper after download and extraction on another Mac",
+    "Real Slack public client, PKCE and redirect/distribution configuration allow a new workspace login",
+    "All five services complete fresh login, text send/receive, image send and recipient confirmation, and app restart with saved history",
+    "Real network interruption/sleep/reconnect retain drafts and do not duplicate sends or report a revoked login as connected",
+    "Keychain approval and notification permission are usable without developer tools or repeated unexplained prompts"
+  ],
+  "nonblocking_if_disclosed": [
+    "Automatic updates are unconfigured; a documented manual update flow is possible",
+    "LINE recent history limit",
+    "Messenger encrypted backup restoration and received media restrictions",
+    "Apple Silicon only"
+  ],
+  "references": {
+    "apple_distribution": "https://developer.apple.com/developer-id/",
+    "slack_public_client_pkce": "https://docs.slack.dev/authentication/using-pkce/"
+  }
+}

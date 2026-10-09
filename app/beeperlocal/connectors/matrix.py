@@ -11,6 +11,7 @@ import asyncio
 from datetime import datetime, timezone
 import json
 import ssl
+from ..tls import client_context
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
@@ -46,7 +47,7 @@ class MatrixAPI:
             raise AppError("CREDENTIALS_CORRUPT")
         self.token = token
         self.timeout = timeout
-        context = ssl.create_default_context()
+        context = client_context()
         self.opener = opener or build_opener(NoRedirect(), HTTPSHandler(context=context))
 
     def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None,

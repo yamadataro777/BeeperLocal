@@ -1,0 +1,19 @@
+# Proxy to use for all Twitter connections.
+proxy: null
+# Alternative to proxy: an HTTP endpoint that returns the proxy URL to use for Twitter connections.
+get_proxy_url: null
+
+# Displayname template for Twitter users.
+# {{ .DisplayName }} is replaced with the display name of the Twitter user.
+# {{ .Username }} is replaced with the username of the Twitter user.
+displayname_template: "{{ .DisplayName }} (Twitter)"
+
+# Maximum number of conversations to sync on startup
+conversation_sync_limit: 20
+
+# Should the bridge cache sessions instead of resyncing chats on every restart?
+cache_session: true
+
+# Should the bridge use "X" instead of "Twitter" in certain places,
+# such as the management room welcome message and MSC2346 bridge info?
+x: false

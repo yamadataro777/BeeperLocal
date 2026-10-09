@@ -58,7 +58,7 @@ export function LoginPanel({ existing, close, completed }: { existing: boolean; 
     {active && <ol className="login-steps"><li>スマートフォンでLINEを開き、QRコードリーダーを開く</li><li>この画面のQRコードを読み取る</li><li>スマートフォンでログインを承認する。確認コードが表示されたら入力する</li></ol>}
     {(error || state.errorCode) && <p className="settings-error" role="alert">{error || errorText(state.errorCode)}</p>}
     {!active && state.stage !== 'completed' && <>
-      <p className="settings-description">LINEのChrome版や同じ方式のクライアントが、ログアウトする場合があります。連携情報はMacのキーチェーンに保存します。</p>
+      <p className="settings-description">本家Beeper・Chrome版LINEとBeeperLocalは、同じLINEアカウントで同時利用できません。最後に連携したアプリが有効になり、もう一方がログアウトする場合があります。使うアプリを決めてから連携してください。連携情報はMacのキーチェーンに保存します。</p>
       {replacing && <label className="check-row login-replace"><input type="checkbox" checked={replace} onChange={e => setReplace(e.target.checked)}/>このMacに保存済みのLINEログインを更新する</label>}
       <button className="primary" disabled={working || (replacing && !replace)} onClick={() => void start()}>QRコードを表示して連携</button>
     </>}

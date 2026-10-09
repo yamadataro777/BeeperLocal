@@ -7,16 +7,25 @@ import time
 from uuid import UUID, uuid5
 
 from .errors import AppError
-from .mcp_access import AccessManager, GRANTS_KEY, SETTINGS_KEY, load_settings
+from .mcp_access import AccessManager, GRANTS_KEY, SETTINGS_KEY, DEFAULT_PORT, default_settings, load_settings
 from .models import iso
 
 MCP_REQUEST_NAMESPACE = UUID("26d908bb-6302-4d9b-af5b-a9c6f78b7084")
 
 
 class DesktopControls:
+    settings_key = SETTINGS_KEY
+    grants_key = GRANTS_KEY
+    default_mcp_port = DEFAULT_PORT
+
     def initialize_controls(self):
-        self.settings = load_settings(self.db)
-        self.access = AccessManager(self.db)
+        defaults = {**default_settings(), "port": self.default_mcp_port}
+        if (self.settings_key != SETTINGS_KEY and self.db.private_get(self.settings_key) is None
+                and self.db.private_get(SETTINGS_KEY) is not None):
+            # Reject old controls: defaulting here could silently resume paused storage.
+            raise AppError("LOCAL_DB_SCHEMA_UNSUPPORTED")
+        self.settings = load_settings(self.db, self.settings_key, defaults)
+        self.access = AccessManager(self.db, self.grants_key)
 
     def require_storage(self):
         if self.settings["storagePaused"]:
@@ -24,7 +33,7 @@ class DesktopControls:
 
     def _save_settings(self, **updates):
         value = {**self.settings, **updates}
-        self.db.private_put(SETTINGS_KEY, value)
+        self.db.private_put(self.settings_key, value)
         self.settings = value
 
     async def restore_mcp(self):
@@ -79,7 +88,7 @@ class DesktopControls:
                         "url": f"http://127.0.0.1:{self.settings['port']}/mcp", "errorCode": self.mcp_error},
                 "clients": grants,
                 "storage": {"paused": self.settings["storagePaused"], "path": str(self.db.path),
-                            "counts": self.db.line_data_counts(self.account_id) if self.account_id else {},
+                            "counts": self.db.provider_data_counts(self.provider, self.account_id) if self.account_id else {},
                             "retention": "until_deleted"},
                 "accountAvailable": bool(self.account_id)}
 
@@ -108,7 +117,7 @@ class DesktopControls:
         await self.pause_storage(True)
         # Let an already issued send finish recording its outcome before showing counts.
         async with self.operation_lock:
-            counts = self.db.line_data_counts(self.account_id)
+            counts = self.db.provider_data_counts(self.provider, self.account_id)
             nonce = secrets.token_urlsafe(24)
             self.deletion_challenge = (nonce, self.account_id, time.monotonic() + 120, counts)
             return {"confirmation": nonce, "counts": counts, "expiresInSeconds": 120}
@@ -124,17 +133,23 @@ class DesktopControls:
         self._save_settings(mcpEnabled=False)
         await self._stop_mcp()
         async with self.operation_lock:
-            if self.db.line_data_counts(self.account_id) != challenge[3]:
+            if self.db.provider_data_counts(self.provider, self.account_id) != challenge[3]:
                 raise AppError("DELETE_CONFIRMATION_EXPIRED")
+            await self.clear_provider_cache()
             remaining = [g.persisted() for g in self.access.all() if g.account_id != self.account_id]
-            counts = self.db.clear_line_data(self.account_id,
-                private_updates={GRANTS_KEY: remaining, SETTINGS_KEY: self.settings, self.catalog_key(): []}, expected_counts=challenge[3])
+            counts = self.db.clear_provider_data(self.provider, self.account_id,
+                private_updates={self.access.key: remaining, self.settings_key: self.settings,
+                                 self.catalog_key(): []}, expected_counts=challenge[3])
             self.selected_id = None
             self.connector = None
             self.connection = "offline"
             self.error_code = None
             self._notify("data_cleared", **self._status())
             return {"deleted": counts, "management": self.management()}
+
+    async def clear_provider_cache(self):
+        """Provider-specific duplicate content; keep login/device keys intact."""
+        return
 
     def require_mcp(self, token, permission=None, conversation_id=None):
         if self.shutting_down or not self.settings["mcpEnabled"]:
@@ -171,7 +186,7 @@ class DesktopControls:
             elif operation == "get_messages":
                 if identity not in records:
                     raise AppError("MCP_ACCESS_DENIED")
-                result = {**self.messages(identity), "source": "saved_local_data"}
+                result = {**self.messages(identity, before=arguments.get("before")), "source": "saved_local_data"}
             elif operation == "search_messages":
                 query = arguments["query"]
                 if not isinstance(query, str) or not query.strip() or len(query) > 500:

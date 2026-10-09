@@ -3,7 +3,7 @@
 Upstream: https://github.com/kongesque/line-cli
 Tag: v0.4.0
 Commit: 80d945ba582c0d1a59dbb4054d5c11e567021ab6
-Desktop version: v0.4.0-beeperlocal.1
+Desktop version: v0.4.0-beeperlocal.2
 License: MIT, retained in LICENSE and bundled with the app.
 
 This directory contains cmd/, internal/, pkg/, scripts/, go.mod and go.sum from that commit.
@@ -23,6 +23,9 @@ Changes cover desktop presentation and a read-only local status field:
 - Native `auth status --json` reports `line_validity=invalidated` when the stored
   session is already known to be invalid. It never asserts remote validity.
 - Added synthetic regressions including an independent QR decoder.
+- Sticker messages retain their numeric `STKID` as `sticker_id` in private JSON
+  history/watch output. Other content metadata and attachment keys are not exported.
+  Desktop images use the existing authenticated `download --output -` path.
 
 No changes to provider protocol, generated LTSM code/data, encryption, message
 sending, refresh or session persistence. Build from scripts/build-desktop.sh.
@@ -30,3 +33,5 @@ sending, refresh or session persistence. Build from scripts/build-desktop.sh.
 Profile CDN evidence: upstream beeper/line pkg/connector/userinfo.go constructs
 https://profile.line-scdn.net + Contact.PicturePath. The app restricts downloads
 to that HTTPS host, rejects redirects and caches bounded raster images in memory.
+
+0.9.3追加修正: `watch --status-events`で固定のready/reconnecting/logged_out状態を出力する。通常のwatch出力は変更せず、認証失効時は自動ログインしない。無通信時の既存認証probeも同じ状態通知へ接続した。

@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-02",
+  "mode": "signed_packaged_core",
+  "version": "0.8.5",
+  "send_calls": 0,
+  "before_messages": 0,
+  "before_excluded_legacy": 2,
+  "connected": true,
+  "conversations": 181,
+  "history_messages": 1,
+  "legacy_message_count": 2,
+  "unsupported_legacy_count": 0,
+  "history_receipt_present": true,
+  "receive_waiting": true,
+  "reopened_offline": true,
+  "reopened_history_messages": 1,
+  "reopened_legacy_message_count": 2,
+  "reopened_search_matches": 1,
+  "reopened_selected_scope_match": true,
+  "status": "passed"
+}

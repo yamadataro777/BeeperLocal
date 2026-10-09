@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-02",
+  "version": "0.8.4",
+  "previous_version": "0.8.3",
+  "app": "/Users/haruotsuchiya/Desktop/BeeperLocal/BeeperLocal.app",
+  "backup": "/Users/haruotsuchiya/Desktop/BeeperLocal/archive/app-backups/BeeperLocal-0.8.3-before-x-20261002-195735.app",
+  "files_verified": 16,
+  "sha256": {
+    "Contents/Info.plist": "f26eaf0adb43847010ccee696042d0fbb5b5d2653cb1dbc2d2a08fdcb07d263c",
+    "Contents/_CodeSignature/CodeResources": "b4f575e8e57aa94c39108982dd338ca57a2207a7a68a71158d7422e2288608cd",
+    "Contents/MacOS/beeperlocal-ig": "a647724e82621b35799dccfd7efaa262811bc46e937c007421feaa65121a07da",
+    "Contents/MacOS/beeperlocal-x": "e0d94e2a4da431ff5296a90959418d2076c6830bdb195cde34a747a0057bcb67",
+    "Contents/MacOS/line": "2e7b7f0096c151ecf071e07322e8999adeaf18ec29c4e786cbdfac138237ba42",
+    "Contents/MacOS/beeperlocal-core": "b79f7e192a661850140bb0d2aab3a87ab8447aeba5d4aadcac0607fae525d971",
+    "Contents/MacOS/beeperlocal-desktop": "43418ae09a6e63b86d89fd1adf2d7b81ac3651b21f6c5c8e8f5c3bbec090f9ec",
+    "Contents/MacOS/beeperlocal-x-login": "ead20cf714ed9fede5ed8c1eef617ba9869c5aad282631b68acad6e1c06a86a9",
+    "Contents/Resources/icon.icns": "f4aba4e3c4e67b82df7510d0f911e44f52ea3b09269bd9fc054f51d537542301",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.exceptions": "a56bcda19734125bbe29a47d1db61f662c8c3c02ce64ebaee911817faa4743de",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.txt": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "Contents/Resources/resources/INSTAGRAM-PROVENANCE.md": "7e23e59a27170c7739c623f0f8f452383c9b257a4a87633e146d1f34a7de0c39",
+    "Contents/Resources/resources/LINE-CLI-LICENSE.txt": "e34feaf3f1bc5b029ba247ea2a354fd3a60b310ea9fde2ee492767fa3afdfb72",
+    "Contents/Resources/resources/LINE-CLI-PROVENANCE.md": "c7ca6e40c08795449225da80160f6e25e09d78a37ffcd3b8880141747d8808d1",
+    "Contents/Resources/resources/X-THIRD-PARTY-NOTICES.txt": "96a8137be033d94f9d58bea95403a260a837c41ee956b74f46f4af04952c9a5f",
+    "Contents/Resources/resources/X-PROVENANCE.md": "42883676b9003e5ceb280e8f67364ce447b601134167de12fb962263729d84c3"
+  },
+  "previous_sha256": {
+    "Contents/Info.plist": "14bafe5855f1be06ba02b8ffa6447c71c6c64eb525ab6823d6870e70d9907d78",
+    "Contents/_CodeSignature/CodeResources": "1c4e55b02f907ec0f7d3535be092310722135a11a63daa919bd78967f1c7e029",
+    "Contents/MacOS/beeperlocal-ig": "8ca9b063210256b019c2ea62f59f45ec9ee545d078c19e7f81724269cb31dff5",
+    "Contents/MacOS/line": "cc9afcbec3d27b17d1caaabca40b4e6717954062c034a5b9c7354578e4555629",
+    "Contents/MacOS/beeperlocal-core": "2c39f1f679ecadb7409c118628afa127869eb56386defb8103bc91666a22e9c1",
+    "Contents/MacOS/beeperlocal-desktop": "acb7299a00f88c84ad7e97303110ee926ace488e456469c7184822cf7ed8d7ad",
+    "Contents/Resources/icon.icns": "f4aba4e3c4e67b82df7510d0f911e44f52ea3b09269bd9fc054f51d537542301",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.exceptions": "a56bcda19734125bbe29a47d1db61f662c8c3c02ce64ebaee911817faa4743de",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.txt": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "Contents/Resources/resources/INSTAGRAM-PROVENANCE.md": "7e23e59a27170c7739c623f0f8f452383c9b257a4a87633e146d1f34a7de0c39",
+    "Contents/Resources/resources/LINE-CLI-LICENSE.txt": "e34feaf3f1bc5b029ba247ea2a354fd3a60b310ea9fde2ee492767fa3afdfb72",
+    "Contents/Resources/resources/LINE-CLI-PROVENANCE.md": "c7ca6e40c08795449225da80160f6e25e09d78a37ffcd3b8880141747d8808d1"
+  },
+  "send_calls": 0
+}

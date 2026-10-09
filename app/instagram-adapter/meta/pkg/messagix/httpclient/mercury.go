@@ -63,6 +63,15 @@ type WaveformData struct {
 }
 
 func (c *HTTPClient) SendMercuryUploadRequest(ctx context.Context, threadID int64, media *MercuryUploadMedia) (*types.MercuryUploadResponse, error) {
+	return c.sendMercuryUploadRequest(ctx, threadID, media, false)
+}
+
+// BeeperLocal uses one attempt even when an upload response is lost.
+func (c *HTTPClient) SendMercuryUploadRequestOnce(ctx context.Context, threadID int64, media *MercuryUploadMedia) (*types.MercuryUploadResponse, error) {
+	return c.sendMercuryUploadRequest(ctx, threadID, media, true)
+}
+
+func (c *HTTPClient) sendMercuryUploadRequest(ctx context.Context, threadID int64, media *MercuryUploadMedia, once bool) (*types.MercuryUploadResponse, error) {
 	if c == nil {
 		return nil, fmt.Errorf("client is nil")
 	}
@@ -91,7 +100,12 @@ func (c *HTTPClient) SendMercuryUploadRequest(ctx context.Context, threadID int6
 		h.Set("sec-fetch-mode", "cors")
 		h.Set("sec-fetch-site", "same-origin") // header is required
 
-		_, respBody, err := c.MakeRequest(ctx, url, http.MethodPost, h, payload, types.NONE)
+		var respBody []byte
+		if once {
+			_, respBody, err = c.MakeRequestOnceNoRedirect(ctx, url, http.MethodPost, h, payload, types.NONE)
+		} else {
+			_, respBody, err = c.MakeRequest(ctx, url, http.MethodPost, h, payload, types.NONE)
+		}
 		if err != nil {
 			// MakeRequest retries itself, so bail immediately if that fails
 			return nil, fmt.Errorf("failed to send MercuryUploadRequest: %w", err)
@@ -99,7 +113,7 @@ func (c *HTTPClient) SendMercuryUploadRequest(ctx context.Context, threadID int6
 		resp, err := c.parseMercuryResponse(ctx, respBody)
 		if err == nil {
 			return resp, nil
-		} else if attempts > MaxHTTPRetries || IsPermanentRequestError(err) || errors.Is(err, types.ErrPleaseReloadPage) {
+		} else if once || attempts > MaxHTTPRetries || IsPermanentRequestError(err) || errors.Is(err, types.ErrPleaseReloadPage) {
 			return nil, err
 		}
 		c.log.Err(err).
@@ -152,6 +166,9 @@ func (c *HTTPClient) parseMetadata(response *types.MercuryUploadResponse) error 
 		err := json.Unmarshal(response.Payload.Metadata, &realMetadata)
 		if err != nil {
 			return fmt.Errorf("failed to unmarshal image metadata in upload response: %w", err)
+		}
+		if len(realMetadata) == 0 {
+			return fmt.Errorf("no image metadata")
 		}
 		response.Payload.RealMetadata = &realMetadata[0]
 	case '{':

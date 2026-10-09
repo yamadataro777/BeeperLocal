@@ -1,0 +1,116 @@
+{
+  "date": "2026-10-02",
+  "provider": "messenger",
+  "scope": "main_app_receive_only_integration_candidate",
+  "candidate_path": "workstreams/messenger-integration/BeeperLocal.app",
+  "usual_app_replaced": false,
+  "subagents_used": false,
+  "offline_checks": {
+    "core_tests": {
+      "passed": 432,
+      "failed": 0,
+      "skipped": 0,
+      "localhost_permission": "full_final_run_under_permission"
+    },
+    "new_messenger_core_tests": 22,
+    "go_tests": 8,
+    "native_swift_boundary_checks": "pass",
+    "gui_tests": 39,
+    "new_messenger_gui_tests": 4,
+    "shell_files": 6,
+    "offline_demo": "pass",
+    "production_build": "pass",
+    "diff_whitespace": "pass",
+    "fixture_visual_review": "pass"
+  },
+  "signing": {
+    "type": "Developer ID Application",
+    "executables_verified": 8,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "copied_candidate_files_hash_matched": 19,
+    "copied_candidate_deep_strict_verify": "pass_with_native_permission",
+    "notarization": "not_checked"
+  },
+  "agent_observed": {
+    "source_core_with_signed_transport": true,
+    "saved_texts_imported_and_read": 2,
+    "conversations": 2,
+    "separate_core_and_transport_process_restart": true,
+    "offline_search_matches": 1,
+    "reconnected": true,
+    "outbound_user_messages": 0,
+    "registered_device_reused": true
+  },
+  "evidence": [
+    "messenger-live-20261002T122505Z.json",
+    "messenger-live-20261002T122734Z.json",
+    "messenger-live-20261002T122929Z.json",
+    "messenger-live-20261002T123729Z.json"
+  ],
+  "user_reported": "No new user report in this implementation chat; original probe reports preserved separately.",
+  "unverified": [
+    "new_inbound_text_after_main_integration",
+    "native_gui_with_real_messenger_data",
+    "normal_packaged_core_live_connection_while_other_core_running",
+    "sleep_and_physical_network_loss",
+    "long_running_session",
+    "another_mac"
+  ],
+  "unsupported": [
+    "send",
+    "messenger_mcp",
+    "old_encrypted_backup_restore",
+    "complete_catalog_and_history",
+    "group_and_media",
+    "disappearing_message_persistence",
+    "remote_deletion_reconciliation"
+  ],
+  "storage": {
+    "body": "main_AES_256_GCM_SQLite",
+    "credentials_and_keys": "native_macos_Keychain",
+    "device_db": "RAM_and_original_Keychain_snapshot",
+    "device_snapshot_limit_bytes": 4194304,
+    "normal_message_history_limited_to_200": false,
+    "legacy_keychain_texts_retained": true,
+    "plaintext_fts": false,
+    "ack_order": [
+      "encrypted_message_commit",
+      "encrypted_registered_account_marker",
+      "Keychain_write_and_readback",
+      "private_ACK"
+    ],
+    "atomic_across_Keychain_and_SQLite": false
+  },
+  "artifact_sha256": {
+    "Contents/Info.plist": "bddc1f49293dae0635104b9267f0870f9615b02e2d67536096b89cf3bbfb0bf8",
+    "Contents/_CodeSignature/CodeResources": "73e7106d4f81d101dd65dec621ed66904f33017e771dea29b8c2599fc6b98384",
+    "Contents/MacOS/beeperlocal-ig": "257214366c20f0e84cacc89e039ab69156f3768a87879730e2c08117593a54a4",
+    "Contents/MacOS/beeperlocal-messenger": "7b0c709f52037948310b05681deffcaa596e92539999f228c721f353a1916718",
+    "Contents/MacOS/beeperlocal-x": "e784e056de29f93fa27049d9b6767075af0e2b023bf4d51caeed35fa9464feb8",
+    "Contents/MacOS/line": "e4b261a8dd8f02c5a2a414b657d4f210e34cb3556ba32171474c74fc28b6c9d7",
+    "Contents/MacOS/beeperlocal-core": "9d8f43635d7a87c2fefbb87fb434d935c8ac9d0559a55754640b8c32ba9031fa",
+    "Contents/MacOS/beeperlocal-desktop": "09c03caba876542fc1c0cb2b39d38e305d446a867a4603b4109673ee149e65a9",
+    "Contents/MacOS/beeperlocal-x-login": "d03321c1df43f2cee5541f7fd4efcdb5794fed1fe30f0636db9b2ff2280a57ae",
+    "Contents/MacOS/beeperlocal-messenger-login": "7162b465edaa65eba5757932793d707a4418654a7e488d236185ec7d6bc73e58",
+    "Contents/Resources/icon.icns": "f4aba4e3c4e67b82df7510d0f911e44f52ea3b09269bd9fc054f51d537542301",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.exceptions": "a56bcda19734125bbe29a47d1db61f662c8c3c02ce64ebaee911817faa4743de",
+    "Contents/Resources/resources/INSTAGRAM-LICENSE.txt": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+    "Contents/Resources/resources/MESSENGER-PROVENANCE.md": "61c9b7af308fe22cffb6c680f2c9bca8e676144d96361dfe2128faaf5744927a",
+    "Contents/Resources/resources/INSTAGRAM-PROVENANCE.md": "7e23e59a27170c7739c623f0f8f452383c9b257a4a87633e146d1f34a7de0c39",
+    "Contents/Resources/resources/LINE-CLI-LICENSE.txt": "e34feaf3f1bc5b029ba247ea2a354fd3a60b310ea9fde2ee492767fa3afdfb72",
+    "Contents/Resources/resources/LINE-CLI-PROVENANCE.md": "d02fccf47449ab98ee800240183380d086fc18c783138446843fc1d7655b7a7c",
+    "Contents/Resources/resources/X-THIRD-PARTY-NOTICES.txt": "96a8137be033d94f9d58bea95403a260a837c41ee956b74f46f4af04952c9a5f",
+    "Contents/Resources/resources/X-PROVENANCE.md": "42883676b9003e5ceb280e8f67364ce447b601134167de12fb962263729d84c3"
+  },
+  "source_sha256": {
+    "app/beeperlocal/messenger.py": "7968a01715ca8d4b2bde0ed464ccd9256b7f803b8d0eabad0b0617d448eeab3a",
+    "app/beeperlocal/desktop_messenger.py": "4f7a0c4c1d721ae313ac06ce5c51a9cd6165f38fdf0aff79e7c5b179915cb979",
+    "app/messenger-adapter/main.go": "cfcf2134aafa8cbd0a55c0908cb16137ed700fc4eee012b6302ce684ea1a97e4",
+    "app/messenger-adapter/memory.go": "bb29d4b4ebde9ee3531c830b1bcfc4bd7347e961dc52f4ec1a924a6edae2ebf7",
+    "app/messenger-adapter/native-login/main.swift": "847cbc60a5249ddd6c112208218564656ca737146afc0d2dce58a5db81846c8a",
+    "app/desktop/src/MessengerPanel.tsx": "22777fcf2e25283ed19e1b5fc16473afa8e2472e25045c57a4bbc2eed541ef52",
+    "app/desktop/src/main.tsx": "8b50dfe2509bd003ebea19f55477a3926af8c4822f5850c56204fd6406ff18d9"
+  },
+  "commercial_distribution_conditions": "unresolved_AGPL_and_provider_conditions_preserved"
+}

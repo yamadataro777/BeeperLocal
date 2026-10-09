@@ -16,6 +16,7 @@ import (
 	"go.mau.fi/mautrix-meta/pkg/instameow"
 	"go.mau.fi/mautrix-meta/pkg/instameow/slidetypes"
 	"go.mau.fi/mautrix-meta/pkg/messagix/cookies"
+	"go.mau.fi/mautrix-meta/pkg/messagix/httpclient"
 	"go.mau.fi/mautrix-meta/pkg/messagix/types"
 	"go.mau.fi/util/jsontime"
 )
@@ -94,6 +95,48 @@ func TestSafeErrorDoesNotExposeResponse(t *testing.T) {
 	}
 }
 
+func TestLoginFailuresHaveDistinctFixedCodes(t *testing.T) {
+	cases := map[error]string{
+		instameow.ErrInstagramWebCredentialsRejected:    "IG_PASSWORD_REJECTED",
+		instameow.ErrInstagramWebTwoFactorCodeRejected:  "IG_CODE_REJECTED",
+		instameow.ErrInstagramWebAccountPendingDeletion: "IG_ACCOUNT_ACTION_REQUIRED",
+		instameow.ErrInstagramWebLoginRejected:          "IG_LOGIN_REJECTED",
+		httpclient.ErrCheckpointRequired:                "IG_AUTH_ACTION_REQUIRED",
+		context.DeadlineExceeded:                        "IG_REQUEST_TIMEOUT",
+	}
+	for cause, want := range cases {
+		if safeCode(cause) != want {
+			t.Fatal("login failure classification changed")
+		}
+	}
+}
+
+func TestImageUploadAndShareNeverRetry(t *testing.T) {
+	for _, status := range []int{500, 307, 200} {
+		for _, upload := range []bool{true, false} {
+			jar := &cookies.Cookies{Platform: types.Instagram}
+			jar.UpdateValues(nil)
+			client := instameow.NewClient(instameow.ClientParams{Cookies: jar, Log: zerolog.Nop()})
+			calls := 0
+			client.GetHTTP().SetTransportOverride(roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls++
+				if calls > 1 {
+					t.Fatal("image request was repeated")
+				}
+				return &http.Response{StatusCode: status, Header: http.Header{"Location": []string{"https://www.instagram.com/redirect"}}, Body: io.NopCloser(strings.NewReader(`{"error":1357004,"errorSummary":"reload"}`)), Request: req}, nil
+			}))
+			if upload {
+				_, _ = client.GetHTTP().SendMercuryUploadRequestOnce(context.Background(), 123, &httpclient.MercuryUploadMedia{Filename: "image.png", MimeType: "image/png", MediaData: []byte("synthetic")})
+			} else {
+				_, _ = client.SendMedia(context.Background(), &slidetypes.SendMediaRequest{AttachmentFBID: "456", ThreadID: "123", OfflineThreadingID: "789"})
+			}
+			if calls != 1 {
+				t.Fatal("incorrect image attempt count")
+			}
+		}
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
@@ -141,5 +184,17 @@ func TestSendNeverRetriesHTTPErrorRedirectOrReload(t *testing.T) {
 				t.Fatal("send acknowledgement lost")
 			}
 		})
+	}
+}
+
+func TestGroupCatalogAndWatchKeepProviderKind(t *testing.T) {
+	thread := &slidetypes.ThreadInfo{ID: "123", ThreadFBID: "123", ThreadID: "999888777", IsGroup: true, ThreadSubtype: slidetypes.ThreadSubtypeGroup}
+	conv, err := directThread(thread)
+	if err != nil || conv.Kind != "group" || watchConversation(thread).Kind != "group" {
+		t.Fatal("group identity lost")
+	}
+	thread.ThreadSubtype = "unexpected"
+	if _, err = directThread(thread); err == nil {
+		t.Fatal("unknown subtype accepted")
 	}
 }

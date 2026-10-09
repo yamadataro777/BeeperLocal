@@ -1,0 +1,903 @@
+// mautrix-twitter - A Matrix-Twitter puppeting bridge.
+// Copyright (C) 2025 Tulir Asokan
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+package connector
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/rs/zerolog"
+	"go.mau.fi/util/exmime"
+	"maunium.net/go/mautrix/bridgev2"
+	"maunium.net/go/mautrix/bridgev2/database"
+	"maunium.net/go/mautrix/bridgev2/networkid"
+	"maunium.net/go/mautrix/event"
+
+	"go.mau.fi/util/ffmpeg"
+
+	"go.mau.fi/mautrix-twitter/pkg/connector/twitterfmt"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/payload"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/types"
+)
+
+func (tc *TwitterClient) convertEditToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, existing []*database.Message, data *types.MessageData) (*bridgev2.ConvertedEdit, error) {
+	existingPart := existing[0]
+	for _, part := range existing[1:] {
+		if part.PartID < existingPart.PartID {
+			existingPart = part
+		}
+	}
+	meta, ok := existingPart.Metadata.(*MessageMetadata)
+	if !ok || meta == nil {
+		meta = &MessageMetadata{}
+	}
+	editData := *data
+	if editData.EditCount == 0 {
+		editData.EditCount = meta.EditCount + 1
+	} else if meta.EditCount >= editData.EditCount {
+		return nil, fmt.Errorf("%w: db edit count %d >= remote edit count %d", bridgev2.ErrIgnoringRemoteEvent, meta.EditCount, editData.EditCount)
+	}
+	originalData, err := tc.fetchOriginalXChatMessage(ctx, ParsePortalID(portal.ID), editData.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch original X message for edit: %w", err)
+	}
+	editData = mergeXChatEditData(originalData, &editData)
+	editData.Text = strings.TrimPrefix(editData.Text, "Edited: ")
+	converted := tc.convertToMatrix(ctx, portal, intent, &editData)
+	if len(converted.Parts) == 0 || converted.Parts[0].Content == nil {
+		return nil, fmt.Errorf("failed to convert edit: no message content")
+	}
+	editPart := converted.Parts[0].ToEditPart(existingPart)
+	updatedMeta := *meta
+	updatedMeta.EditCount = editData.EditCount
+	editPart.Part.Metadata = &updatedMeta
+	return &bridgev2.ConvertedEdit{
+		ModifiedParts: []*bridgev2.ConvertedEditPart{editPart},
+	}, nil
+}
+
+func (tc *TwitterClient) fetchOriginalXChatMessage(ctx context.Context, conversationID, messageID string) (*types.MessageData, error) {
+	const eventLimit = 10
+	cursor, err := xchatEditHistoryCursor(messageID)
+	if err != nil {
+		return nil, err
+	}
+
+	settings := payload.DefaultGetConversationPageQuerySettings()
+	settings.ConversationEventLimit = eventLimit
+
+	minKeyVersion := xchatBackfillMaxInt
+	if km := tc.client.GetKeyManager(); km != nil {
+		if ck, err := km.GetLatestConversationKey(ctx, conversationID); err == nil && ck != nil && ck.KeyVersion != "" {
+			minKeyVersion = ck.KeyVersion
+		}
+	}
+
+	vars := payload.NewGetConversationPageQueryVariables(conversationID, cursor, minKeyVersion, settings)
+	resp, err := tc.client.GetConversationPage(ctx, vars)
+	if err != nil {
+		return nil, err
+	}
+	page := resp.Data.GetConversationPage
+
+	// Store supplemental keys first so the target message can be decrypted.
+	for _, encoded := range page.MissingConversationKeyChangeEvents {
+		evt, decodeErr := twittermeow.DecodeMessageEvent(encoded)
+		if decodeErr == nil && normalizeXChatBackfillEventConversation(evt, conversationID) &&
+			evt.Detail != nil && evt.Detail.ConversationKeyChangeEvent != nil {
+			_ = tc.storeConversationKeyFromChangeEvent(ctx, evt, evt.Detail.ConversationKeyChangeEvent)
+		}
+	}
+
+	for _, encoded := range page.EncodedMessageEvents {
+		evt, decodeErr := twittermeow.DecodeMessageEvent(encoded)
+		if decodeErr != nil || !normalizeXChatBackfillEventConversation(evt, conversationID) || evt.Detail == nil {
+			continue
+		}
+		if evt.Detail.ConversationKeyChangeEvent != nil {
+			_ = tc.storeConversationKeyFromChangeEvent(ctx, evt, evt.Detail.ConversationKeyChangeEvent)
+			continue
+		}
+		if evt.Detail.MessageCreateEvent == nil {
+			continue
+		}
+		msg, _, _, _ := tc.decodeXChatMessageCreateForBackfill(ctx, conversationID, evt)
+		if msg != nil && msg.SequenceID == messageID {
+			return &msg.MessageData, nil
+		}
+	}
+	return nil, fmt.Errorf("original message not found in targeted conversation history")
+}
+
+func xchatEditHistoryCursor(messageID string) (string, error) {
+	sequenceID, err := strconv.ParseUint(messageID, 10, 63)
+	if err != nil || sequenceID == 1<<63-1 {
+		return "", fmt.Errorf("original XChat message ID is not a valid sequence ID")
+	}
+	return strconv.FormatUint(sequenceID+1, 10), nil
+}
+
+func mergeXChatEditData(original, edit *types.MessageData) types.MessageData {
+	merged := *original
+	merged.ID = edit.ID
+	merged.Time = edit.Time
+	merged.Text = edit.Text
+	merged.Entities = edit.Entities
+	merged.EditCount = edit.EditCount
+	if edit.SenderID != "" {
+		merged.SenderID = edit.SenderID
+	}
+	if edit.RecipientID != "" {
+		merged.RecipientID = edit.RecipientID
+	}
+	if edit.ConversationKeyVersion != "" {
+		merged.ConversationKeyVersion = edit.ConversationKeyVersion
+	}
+	return merged
+}
+
+func (tc *TwitterClient) convertToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *types.MessageData) *bridgev2.ConvertedMessage {
+	var replyTo *networkid.MessageOptionalPartID
+	if msg.ReplyData.ID != "" {
+		replyTo = &networkid.MessageOptionalPartID{
+			MessageID: MakeMessageID(msg.ReplyData.ID),
+		}
+	}
+
+	tc.populateMentionIDs(msg)
+
+	textPart := &bridgev2.ConvertedMessagePart{
+		ID:      "",
+		Type:    event.EventMessage,
+		Content: twitterfmt.Parse(ctx, portal, msg),
+	}
+
+	parts := make([]*bridgev2.ConvertedMessagePart, 0, len(msg.Attachments)+1)
+	firstMediaPart := -1
+
+	for _, attachment := range normalizedMessageAttachments(msg) {
+		if attachment == nil {
+			continue
+		}
+		convertedAttachmentPart, indices, err := tc.twitterAttachmentToMatrix(ctx, portal, intent, msg, attachment)
+		if err != nil {
+			zerolog.Ctx(ctx).Err(err).Msg("Failed to convert attachment")
+			parts = append(parts, &bridgev2.ConvertedMessagePart{
+				Type: event.EventMessage,
+				Content: &event.MessageEventContent{
+					MsgType: event.MsgNotice,
+					Body:    "Failed to convert attachment from Twitter",
+				},
+			})
+		} else if attachment.Card != nil || attachment.Tweet != nil {
+			textPart.Content.BeeperLinkPreviews = append(textPart.Content.BeeperLinkPreviews, convertedAttachmentPart.Content.BeeperLinkPreviews...)
+		} else {
+			if firstMediaPart < 0 {
+				firstMediaPart = len(parts)
+			}
+			parts = append(parts, convertedAttachmentPart)
+			removeEntityLinkFromText(textPart, indices)
+		}
+	}
+
+	if len(textPart.Content.Body) > 0 || len(textPart.Content.BeeperLinkPreviews) > 0 {
+		captionPart := firstMediaPart
+		if captionPart < 0 && len(parts) > 0 {
+			captionPart = 0
+		}
+		if captionPart >= 0 {
+			parts[captionPart] = bridgev2.MergeCaption(textPart, parts[captionPart])
+		} else {
+			parts = append(parts, textPart)
+		}
+	}
+
+	for i, part := range parts {
+		if i == 0 {
+			part.ID = ""
+		} else {
+			part.ID = networkid.PartID(strconv.Itoa(i))
+		}
+		part.DBMetadata = &MessageMetadata{
+			EditCount: msg.EditCount,
+		}
+	}
+
+	return &bridgev2.ConvertedMessage{
+		ReplyTo: replyTo,
+		Parts:   parts,
+	}
+}
+
+func normalizedMessageAttachments(msg *types.MessageData) []*types.Attachment {
+	if len(msg.Attachments) > 0 {
+		return msg.Attachments
+	}
+	if msg.Attachment != nil {
+		return []*types.Attachment{msg.Attachment}
+	}
+	return nil
+}
+
+func removeEntityLinkFromText(msgPart *bridgev2.ConvertedMessagePart, indices []int) {
+	if len(indices) < 2 {
+		return
+	}
+
+	start, end := indices[0], indices[1]
+	if start <= 0 || end <= start || end > len(msgPart.Content.Body) {
+		return
+	}
+
+	msgPart.Content.Body = msgPart.Content.Body[:start-1] + msgPart.Content.Body[end:]
+}
+
+func (tc *TwitterClient) getDisplayNameForUser(ctx context.Context, userID string) string {
+	if userID == "" {
+		return ""
+	}
+
+	tc.userCacheLock.RLock()
+	user := tc.userCache[userID]
+	tc.userCacheLock.RUnlock()
+
+	if user == nil {
+		if err := tc.ensureUsersInCacheByID(ctx, []string{userID}); err != nil {
+			zerolog.Ctx(ctx).Debug().
+				Err(err).
+				Str("user_id", userID).
+				Msg("Failed to fetch user while resolving display name")
+			return ""
+		}
+		tc.userCacheLock.RLock()
+		user = tc.userCache[userID]
+		tc.userCacheLock.RUnlock()
+	}
+
+	if user == nil {
+		return ""
+	}
+	if user.Name != "" {
+		return user.Name
+	}
+	return user.ScreenName
+}
+
+func (tc *TwitterClient) populateMentionIDs(msg *types.MessageData) {
+	if msg == nil || msg.Entities == nil || len(msg.Entities.UserMentions) == 0 {
+		return
+	}
+
+	var textRunes []rune
+	textLen := 0
+	if msg.Text != "" {
+		textRunes = []rune(msg.Text)
+		textLen = len(textRunes)
+	}
+
+	for i := range msg.Entities.UserMentions {
+		mention := &msg.Entities.UserMentions[i]
+		if mention.IDStr != "" {
+			continue
+		}
+
+		screenName := strings.TrimSpace(mention.ScreenName)
+		screenName = strings.TrimPrefix(screenName, "@")
+
+		if screenName == "" && len(mention.Indices) >= 2 && textLen > 0 {
+			start := mention.Indices[0]
+			end := mention.Indices[1]
+			if start < 0 {
+				start = 0
+			}
+			if end < start {
+				end = start
+			}
+			if end > textLen {
+				end = textLen
+			}
+			if start < end {
+				mentionText := strings.TrimSpace(string(textRunes[start:end]))
+				mentionText = strings.TrimPrefix(mentionText, "@")
+				screenName = mentionText
+			}
+		}
+
+		if screenName == "" {
+			continue
+		}
+		mention.ScreenName = screenName
+
+		idStr, id := tc.lookupUserIDByScreenName(screenName)
+		if idStr == "" {
+			continue
+		}
+		mention.IDStr = idStr
+		if mention.ID == 0 && id != 0 {
+			mention.ID = id
+		}
+	}
+}
+
+func (tc *TwitterClient) lookupUserIDByScreenName(screenName string) (string, int64) {
+	normalized := strings.TrimSpace(screenName)
+	normalized = strings.TrimPrefix(normalized, "@")
+	if normalized == "" {
+		return "", 0
+	}
+
+	if tc.userLogin != nil {
+		if tc.userLogin.RemoteName != "" && strings.EqualFold(tc.userLogin.RemoteName, normalized) {
+			return ParseUserLoginID(tc.userLogin.ID), 0
+		}
+		if tc.userLogin.RemoteProfile.Username != "" && strings.EqualFold(tc.userLogin.RemoteProfile.Username, normalized) {
+			return ParseUserLoginID(tc.userLogin.ID), 0
+		}
+	}
+
+	tc.userCacheLock.RLock()
+	defer tc.userCacheLock.RUnlock()
+	for _, user := range tc.userCache {
+		if user == nil {
+			continue
+		}
+		if strings.EqualFold(user.ScreenName, normalized) {
+			if user.IDStr != "" {
+				return user.IDStr, user.ID
+			}
+			if user.ID != 0 {
+				return strconv.FormatInt(user.ID, 10), user.ID
+			}
+			return "", 0
+		}
+	}
+	return "", 0
+}
+
+func (tc *TwitterClient) twitterAttachmentToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, msg *types.MessageData, attachment *types.Attachment) (*bridgev2.ConvertedMessagePart, []int, error) {
+	var attachmentInfo *types.AttachmentInfo
+	var attachmentURL string
+	var guessedMime string
+	var msgType event.MessageType
+	extraInfo := map[string]any{}
+	canUseXChat := portal.Metadata.(*PortalMetadata).CanUseXChat()
+	if attachment.Photo == nil && attachment.Video == nil && attachment.AnimatedGif == nil {
+		if attachment.Media != nil {
+			applyMediaInfo(attachment, attachment.Media)
+		}
+		if attachment.Photo == nil && attachment.Video == nil && attachment.AnimatedGif == nil && msg.Entities != nil && len(msg.Entities.Media) > 0 {
+			media := msg.Entities.Media[0]
+			applyMediaInfo(attachment, &media)
+		}
+	}
+	if attachment.Photo != nil {
+		attachmentInfo = attachment.Photo
+		guessedMime = "image/jpeg" // attachment doesn't include this specifically
+		msgType = event.MsgImage
+		attachmentURL = resolveLegacyAttachmentURL(attachmentInfo, "")
+	} else if attachment.Video != nil || attachment.AnimatedGif != nil {
+		isGif := attachment.AnimatedGif != nil
+		if isGif {
+			attachmentInfo = attachment.AnimatedGif
+			extraInfo["fi.mau.gif"] = true
+			extraInfo["fi.mau.loop"] = true
+			extraInfo["fi.mau.autoplay"] = true
+			extraInfo["fi.mau.hide_controls"] = true
+			extraInfo["fi.mau.no_audio"] = true
+			guessedMime = "image/gif"
+			msgType = event.MsgImage
+		} else {
+			attachmentInfo = attachment.Video
+			guessedMime = "video/mp4"
+			msgType = event.MsgVideo
+		}
+
+		variantCount := len(attachmentInfo.VideoInfo.Variants)
+		zerolog.Ctx(ctx).Debug().
+			Bool("is_gif", isGif).
+			Str("media_hash_key", attachmentInfo.MediaHashKey).
+			Bool("can_use_xchat", canUseXChat).
+			Str("media_url_https", attachmentInfo.MediaURLHTTPS).
+			Int("variant_count", variantCount).
+			Msg("Processing video/gif attachment")
+
+		// For XChat encrypted media, skip variant lookup - we'll use MediaHashKey
+		// Also extract URL if conversation doesn't support XChat (unencrypted)
+		if attachmentInfo.MediaHashKey == "" || !canUseXChat {
+			// Try to get video variant URL first
+			highestBitRateVariant, err := attachmentInfo.VideoInfo.GetHighestBitrateVariant()
+			var variantURL string
+			if err == nil {
+				variantURL = highestBitRateVariant.URL
+			}
+			zerolog.Ctx(ctx).Debug().
+				Err(err).
+				Str("variant_url", variantURL).
+				Msg("Attempted to get highest bitrate variant")
+			attachmentURL = resolveLegacyAttachmentURL(attachmentInfo, variantURL)
+			if attachmentURL == "" {
+				return nil, nil, fmt.Errorf("no media URL available (variant_err=%v, variant_url=%q, media_url_https=%q, media_url=%q, expanded_url=%q, url=%q)", err, variantURL, attachmentInfo.MediaURLHTTPS, attachmentInfo.MediaURL, attachmentInfo.ExpandedURL, attachmentInfo.URL)
+			}
+		}
+	} else if attachment.Card != nil {
+		var urls []types.URLs
+		if msg.Entities != nil {
+			urls = msg.Entities.URLs
+		}
+		content := event.MessageEventContent{
+			MsgType:            event.MsgText,
+			BeeperLinkPreviews: []*event.BeeperLinkPreview{tc.attachmentCardToMatrix(ctx, portal, intent, attachment, urls, msg.ConversationKeyVersion)},
+		}
+		return &bridgev2.ConvertedMessagePart{
+			ID:      networkid.PartID(""),
+			Type:    event.EventMessage,
+			Content: &content,
+		}, []int{0, 0}, nil
+	} else if attachment.Tweet != nil {
+		content := event.MessageEventContent{
+			MsgType:            event.MsgText,
+			BeeperLinkPreviews: []*event.BeeperLinkPreview{tc.attachmentTweetToMatrix(ctx, portal, intent, attachment.Tweet)},
+		}
+		return &bridgev2.ConvertedMessagePart{
+			ID:      networkid.PartID(""),
+			Type:    event.EventMessage,
+			Content: &content,
+		}, []int{0, 0}, nil
+	} else {
+		return nil, nil, fmt.Errorf("unsupported attachment type")
+	}
+
+	content := event.MessageEventContent{
+		Info: &event.FileInfo{
+			MimeType: guessedMime,
+			Width:    attachmentInfo.OriginalInfo.Width,
+			Height:   attachmentInfo.OriginalInfo.Height,
+			Duration: attachmentInfo.VideoInfo.DurationMillis,
+		},
+		MsgType: msgType,
+		Body:    attachmentInfo.IDStr,
+	}
+	if content.Body == "" {
+		content.Body = strings.TrimPrefix(string(msgType), "m.")
+	}
+
+	audioOnly := attachment.Video != nil && attachment.Video.AudioOnly
+
+	useXChatMedia := attachmentInfo.MediaHashKey != ""
+	if useXChatMedia && !canUseXChat {
+		conversationID := ParsePortalID(portal.ID)
+		if err := tc.client.RefreshConversationKeys(ctx, conversationID); err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Str("conversation_id", conversationID).
+				Str("key_version", msg.ConversationKeyVersion).
+				Msg("Failed to refresh conversation keys for XChat media")
+		}
+		canUseXChat = portal.Metadata.(*PortalMetadata).CanUseXChat()
+	}
+
+	zerolog.Ctx(ctx).Debug().
+		Str("media_hash_key", attachmentInfo.MediaHashKey).
+		Bool("can_use_xchat", canUseXChat).
+		Str("attachment_url", attachmentURL).
+		Bool("use_xchat_path", useXChatMedia).
+		Msg("Media download decision")
+
+	handled, err := tc.tryHandleXChatMedia(ctx, portal, intent, msg, attachmentInfo, attachmentURL, audioOnly, &content, canUseXChat)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !handled {
+		if err := tc.handleLegacyMedia(ctx, portal, intent, attachmentInfo, attachmentURL, audioOnly, &content); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	if audioOnly {
+		content.MSC3245Voice = &event.MSC3245Voice{}
+	}
+	extra := map[string]any{}
+	// Add GIF-related fields at top level for Beeper client compatibility
+	for k, v := range extraInfo {
+		extra[k] = v
+	}
+	// Store OriginalAttachments for reply previews (needed for Twitter to display image thumbnails)
+	if len(msg.OriginalAttachments) > 0 {
+		extra["com.beeper.xchat.original_attachments"] = msg.OriginalAttachments
+	}
+
+	// Set FileName explicitly to ensure it matches Body
+	content.FileName = content.Body
+
+	return &bridgev2.ConvertedMessagePart{
+		ID:      networkid.PartID(""),
+		Type:    event.EventMessage,
+		Content: &content,
+		Extra:   extra,
+	}, attachmentInfo.Indices, nil
+}
+
+// addFileExtension appends a file extension based on MIME type if not already present.
+func addFileExtension(body *string, mimeType string) {
+	ext := exmime.ExtensionFromMimetype(mimeType)
+	if ext != "" && !strings.HasSuffix(*body, ext) {
+		*body += ext
+	}
+}
+
+func resolveLegacyAttachmentURL(info *types.AttachmentInfo, variantURL string) string {
+	candidates := []string{
+		variantURL,
+		info.MediaURLHTTPS,
+		info.MediaURL,
+		info.ExpandedURL,
+		info.URL,
+	}
+	for _, candidate := range candidates {
+		normalized := normalizeMediaURL(candidate)
+		if normalized != "" {
+			return normalized
+		}
+	}
+	return ""
+}
+
+func normalizeMediaURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "//") {
+		return "https:" + trimmed
+	}
+	if strings.HasPrefix(trimmed, "https://") {
+		return trimmed
+	}
+	if strings.HasPrefix(trimmed, "http://") {
+		if isPublicCDNURL(trimmed) {
+			return "https://" + strings.TrimPrefix(trimmed, "http://")
+		}
+		return trimmed
+	}
+	// No scheme: assume https if it looks like a hostname/path.
+	if strings.Contains(trimmed, ".") {
+		return "https://" + trimmed
+	}
+	return trimmed
+}
+
+func applyMediaInfo(attachment *types.Attachment, info *types.AttachmentInfo) {
+	if attachment == nil || info == nil {
+		return
+	}
+
+	switch strings.ToLower(info.Type) {
+	case "photo":
+		attachment.Photo = info
+	case "animated_gif", "gif":
+		attachment.AnimatedGif = info
+	case "video":
+		attachment.Video = info
+	case "audio":
+		info.AudioOnly = true
+		attachment.Video = info
+	default:
+		if len(info.VideoInfo.Variants) > 0 || info.VideoInfo.DurationMillis > 0 {
+			attachment.Video = info
+		} else {
+			attachment.Photo = info
+		}
+	}
+}
+
+func directMediaUserID(portal *bridgev2.Portal, loginID networkid.UserLoginID) networkid.UserLoginID {
+	if portal.Receiver != "" {
+		return portal.Receiver
+	}
+	return loginID
+}
+
+func (tc *TwitterClient) uploadMediaReader(
+	ctx context.Context,
+	portal *bridgev2.Portal,
+	intent bridgev2.MatrixAPI,
+	content *event.MessageEventContent,
+	size int64,
+	audioOnly bool,
+	cb func(io.Writer) error,
+) error {
+	var err error
+	content.URL, content.File, err = intent.UploadMediaStream(ctx, portal.MXID, size, true, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
+		err := cb(file)
+		if err != nil {
+			return nil, err
+		}
+		if audioOnly && ffmpeg.Supported() {
+			outFile, err := ffmpeg.ConvertPath(ctx, file.(*os.File).Name(), ".ogg", []string{}, []string{"-vn", "-c:a", "libopus"}, false)
+			if err == nil {
+				content.Info.MimeType = "audio/ogg"
+				content.Info.Width = 0
+				content.Info.Height = 0
+				content.Info.Size = 0
+				content.MsgType = event.MsgAudio
+				content.Body += ".ogg"
+				return &bridgev2.FileStreamResult{
+					ReplacementFile: outFile,
+					MimeType:        content.Info.MimeType,
+					FileName:        content.Body,
+				}, nil
+			}
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to convert voice message to ogg")
+		}
+		realFile, ok := file.(*os.File)
+		if ok {
+			prefix := make([]byte, 512)
+			n, err := realFile.ReadAt(prefix, 0)
+			if err != nil {
+				return nil, err
+			}
+			mime := http.DetectContentType(prefix[:n])
+			if mime != "application/octet-stream" {
+				content.Info.MimeType = mime
+			}
+		}
+		addFileExtension(&content.Body, content.Info.MimeType)
+		return &bridgev2.FileStreamResult{
+			MimeType: content.Info.MimeType,
+			FileName: content.Body,
+		}, nil
+	})
+	return err
+}
+
+var ErrFailedToDownload = errors.New("failed to download XChat media")
+
+func (tc *TwitterClient) tryHandleXChatMedia(
+	ctx context.Context,
+	portal *bridgev2.Portal,
+	intent bridgev2.MatrixAPI,
+	msg *types.MessageData,
+	attachmentInfo *types.AttachmentInfo,
+	attachmentURL string,
+	audioOnly bool,
+	content *event.MessageEventContent,
+	canUseXChat bool,
+) (bool, error) {
+	if attachmentInfo.MediaHashKey == "" {
+		return false, nil
+	}
+
+	conversationID := ParsePortalID(portal.ID)
+	if tc.connector.directMedia {
+		if !canUseXChat {
+			if attachmentURL == "" {
+				return false, fmt.Errorf("no conversation keys available for encrypted media")
+			}
+			return false, nil
+		}
+		userID := directMediaUserID(portal, tc.userLogin.ID)
+		encMediaID := MakeEncryptedMediaID(EncryptedMediaInfo{
+			UserID:         userID,
+			ConversationID: conversationID,
+			MediaHashKey:   attachmentInfo.MediaHashKey,
+			KeyVersion:     msg.ConversationKeyVersion,
+		})
+		var err error
+		content.URL, err = tc.connector.br.Matrix.GenerateContentURI(ctx, encMediaID)
+		if err != nil {
+			return true, fmt.Errorf("failed to generate direct media URI: %w", err)
+		}
+		addFileExtension(&content.Body, content.Info.MimeType)
+		return true, nil
+	}
+
+	if !canUseXChat {
+		if attachmentURL == "" {
+			return false, fmt.Errorf("no conversation keys available for encrypted media")
+		}
+		return false, nil
+	}
+
+	err := tc.uploadMediaReader(ctx, portal, intent, content, -1, audioOnly, func(writer io.Writer) error {
+		size, err := tc.client.DownloadXChatMedia(ctx, conversationID, attachmentInfo.MediaHashKey, msg.ConversationKeyVersion, writer)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrFailedToDownload, err)
+		}
+		content.Info.Size = size
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, ErrFailedToDownload) && attachmentURL != "" {
+			zerolog.Ctx(ctx).Warn().Err(err).
+				Str("conversation_id", conversationID).
+				Msg("Failed to download XChat media, falling back to legacy URL")
+			return false, nil
+		}
+		return true, err
+	}
+
+	return true, nil
+}
+
+func (tc *TwitterClient) handleLegacyMedia(
+	ctx context.Context,
+	portal *bridgev2.Portal,
+	intent bridgev2.MatrixAPI,
+	attachmentInfo *types.AttachmentInfo,
+	attachmentURL string,
+	audioOnly bool,
+	content *event.MessageEventContent,
+) error {
+	if attachmentURL == "" {
+		return fmt.Errorf("no media URL available (media_url_https=%q, media_url=%q, expanded_url=%q, url=%q)", attachmentInfo.MediaURLHTTPS, attachmentInfo.MediaURL, attachmentInfo.ExpandedURL, attachmentInfo.URL)
+	}
+	zerolog.Ctx(ctx).Debug().Str("attachment_url", attachmentURL).Msg("Using legacy media download")
+
+	fileResp, err := downloadFile(ctx, tc.client, attachmentURL)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = fileResp.Body.Close()
+	}()
+
+	if tc.connector.directMedia {
+		userID := directMediaUserID(portal, tc.userLogin.ID)
+		content.URL, err = tc.connector.br.Matrix.GenerateContentURI(ctx, MakeMediaID(userID, attachmentURL))
+		addFileExtension(&content.Body, content.Info.MimeType)
+		return err
+	}
+
+	return tc.uploadMediaReader(ctx, portal, intent, content, fileResp.ContentLength, audioOnly, func(writer io.Writer) error {
+		n, err := io.Copy(writer, fileResp.Body)
+		if err != nil {
+			return err
+		}
+		content.Info.Size = int(n)
+		return nil
+	})
+}
+
+func downloadFile(ctx context.Context, cli *twittermeow.Client, url string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare request: %w", err)
+	}
+
+	if isPublicCDNURL(url) {
+		// Public CDN URLs use minimal headers - no auth, no Origin/Referer
+		req.Header.Set("User-Agent", cli.GetUserAgent())
+		req.Header.Set("Accept", "*/*")
+	} else {
+		// Authenticated requests use full headers with cookies
+		headers := cli.GetBaseHeaders()
+		headers.Set("Cookie", cli.GetCookieString())
+		req.Header = headers
+	}
+
+	getResp, err := cli.HTTP.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	return getResp, nil
+}
+
+// isPublicCDNURL returns true for Twitter CDN URLs that don't require authentication.
+func isPublicCDNURL(url string) bool {
+	return strings.Contains(url, "pbs.twimg.com") ||
+		strings.Contains(url, "abs.twimg.com") ||
+		strings.Contains(url, "video.twimg.com")
+}
+
+func (tc *TwitterClient) attachmentCardToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, attachment *types.Attachment, urls []types.URLs, keyVersion string) *event.BeeperLinkPreview {
+	card := attachment.Card
+	canonicalURL := card.BindingValues.CardURL.StringValue
+	for _, url := range urls {
+		if url.URL == canonicalURL {
+			canonicalURL = url.ExpandedURL
+			break
+		}
+	}
+	preview := &event.BeeperLinkPreview{
+		LinkPreview: event.LinkPreview{
+			CanonicalURL: canonicalURL,
+			Title:        card.BindingValues.Title.StringValue,
+			Description:  card.BindingValues.Description.StringValue,
+		},
+	}
+
+	// Download banner image if available (XChat encrypted only)
+	if attachment.URLBannerMediaHashKey != "" && portal.Metadata.(*PortalMetadata).CanUseXChat() {
+		var err error
+		preview.ImageURL, _, err = intent.UploadMediaStream(ctx, portal.MXID, -1, false, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
+			size, err := tc.client.DownloadXChatMedia(ctx, ParsePortalID(portal.ID), attachment.URLBannerMediaHashKey, keyVersion, file)
+			if err != nil {
+				return nil, err
+			}
+			preview.ImageType = "image/jpeg"
+			preview.ImageSize = event.IntOrString(size)
+			return &bridgev2.FileStreamResult{
+				MimeType: "image/jpeg",
+				FileName: "banner.jpeg",
+			}, nil
+		})
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("Failed to upload URL attachment banner image to Matrix")
+		}
+	}
+
+	return preview
+}
+
+func (tc *TwitterClient) attachmentTweetToMatrix(ctx context.Context, portal *bridgev2.Portal, intent bridgev2.MatrixAPI, tweet *types.AttachmentTweet) *event.BeeperLinkPreview {
+	matchedURL := tweet.ExpandedURL
+	if tweet.Status.FullText == "" && matchedURL != "" {
+		resolved, err := tc.client.GetTweetPreview(ctx, matchedURL)
+		if err != nil {
+			zerolog.Ctx(ctx).Warn().Msg("Failed to fetch rich preview for XChat post attachment")
+		} else {
+			tweet = resolved
+		}
+	}
+
+	linkPreview := event.LinkPreview{
+		CanonicalURL: tweet.ExpandedURL,
+		Title:        "Post on X",
+		Description:  tweet.Status.FullText,
+	}
+	if tweet.Status.User.Name != "" {
+		linkPreview.Title = tweet.Status.User.Name + " on X"
+	}
+	medias := tweet.Status.Entities.Media
+	if len(medias) > 0 {
+		media := medias[0]
+		if media.Type == "photo" {
+			resp, err := downloadFile(ctx, tc.client, media.MediaURLHTTPS)
+			if err != nil {
+				zerolog.Ctx(ctx).Err(err).Msg("failed to download tweet image")
+			} else {
+				linkPreview.ImageType = "image/jpeg"
+				linkPreview.ImageWidth = event.IntOrString(media.OriginalInfo.Width)
+				linkPreview.ImageHeight = event.IntOrString(media.OriginalInfo.Height)
+				linkPreview.ImageSize = event.IntOrString(resp.ContentLength)
+				linkPreview.ImageURL, _, err = intent.UploadMediaStream(ctx, portal.MXID, resp.ContentLength, false, func(file io.Writer) (*bridgev2.FileStreamResult, error) {
+					_, err := io.Copy(file, resp.Body)
+					if err != nil {
+						return nil, err
+					}
+					return &bridgev2.FileStreamResult{
+						MimeType: linkPreview.ImageType,
+						FileName: "image.jpeg",
+					}, nil
+				})
+				if err != nil {
+					zerolog.Ctx(ctx).Err(err).Msg("failed to upload tweet image to Matrix")
+				}
+			}
+		}
+	}
+	return &event.BeeperLinkPreview{
+		LinkPreview: linkPreview,
+		MatchedURL:  matchedURL,
+	}
+}

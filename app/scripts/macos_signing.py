@@ -17,7 +17,12 @@ import tempfile
 
 APP_ID = "local.beeperlocal.desktop"
 HELPERS = {"beeperlocal-core": APP_ID + ".core", "line": APP_ID + ".line"}
-OPTIONAL_HELPERS = {"beeperlocal-ig": APP_ID + ".instagram"}
+OPTIONAL_HELPERS = {"beeperlocal-ig": APP_ID + ".instagram", "beeperlocal-x": APP_ID + ".x",
+                    "beeperlocal-x-login": APP_ID + ".x-login",
+                    "beeperlocal-messenger": APP_ID + ".messenger",
+                    "beeperlocal-messenger-login": APP_ID + ".messenger-login",
+                    "beeperlocal-instagram-login": APP_ID + ".instagram-login"}
+OPTIONAL_HELPERS['beeperlocal-slack-login'] = APP_ID + '.slack-login'
 
 
 class SigningError(Exception):

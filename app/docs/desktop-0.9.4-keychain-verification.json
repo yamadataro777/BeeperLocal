@@ -1,0 +1,835 @@
+{
+  "version": "0.9.4",
+  "date": "2026-10-03",
+  "host_macos": "26.5.2",
+  "tests": {
+    "python": 532,
+    "python_passed": true,
+    "targeted_gui": 14,
+    "targeted_gui_passed": true,
+    "frozen_core_tests": 45,
+    "frozen_core_modules": 43,
+    "frozen_core_passed": true,
+    "shell_syntax_files": 8,
+    "shell_syntax_passed": true,
+    "offline_demo_passed": true,
+    "production_build_passed": true
+  },
+  "signature": {
+    "mode": "release",
+    "executables_verified": 10,
+    "embedded_binaries_verified": 85,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "compatibility": {
+    "passed": true,
+    "minimumOS": "13.0",
+    "executables": 10,
+    "embeddedBinaries": 85,
+    "binaries": [
+      {
+        "binary": "beeperlocal-core",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-desktop",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-ig",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-instagram-login",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-messenger",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-messenger-login",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-slack-login",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-x",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "beeperlocal-x-login",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "line",
+        "minimumOS": "13.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libXau.6.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libavif.16.4.2.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libjpeg.62.4.0.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/liblcms2.2.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/liblzma.5.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libopenjp2.2.5.4.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libsharpyuv.0.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libtiff.6.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libwebp.7.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libwebpdemux.2.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libwebpmux.3.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libxcb.1.1.0.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/.dylibs/libz.1.3.1.zlib-ng.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_avif.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_imaging.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_imagingcms.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_imagingmath.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_imagingtk.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/PIL/_webp.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/Python.framework/Versions/3.13/Python",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/_cffi_backend.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/chat_xdk/_native.abi3.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/cryptography/hazmat/bindings/_rust.abi3.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/libcrypto.3.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/libncurses.6.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/libssl.3.dylib",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/pydantic_core/_pydantic_core.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_asyncio.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_bisect.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_blake2.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_bz2.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_cn.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_hk.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_iso2022.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_jp.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_kr.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_codecs_tw.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_contextvars.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_csv.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_ctypes.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_curses.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_datetime.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_decimal.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_elementtree.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_hashlib.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_heapq.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_interpqueues.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_interpreters.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_json.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_lzma.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_md5.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_multibytecodec.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_multiprocessing.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_opcode.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_pickle.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_posixshmem.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_posixsubprocess.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_queue.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_random.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_scproxy.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_sha1.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_sha2.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_sha3.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_socket.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_sqlite3.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_ssl.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_statistics.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_struct.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_uuid.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/_zoneinfo.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/array.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/binascii.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/fcntl.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/grp.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/math.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/mmap.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/pyexpat.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/readline.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/resource.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/select.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/syslog.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/termios.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/unicodedata.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/python3.13/lib-dynload/zlib.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      },
+      {
+        "binary": "core/rpds/rpds.cpython-313-darwin.so",
+        "minimumOS": "11.0",
+        "architectures": [
+          "arm64"
+        ],
+        "issues": []
+      }
+    ]
+  },
+  "previous_usual_app_version": "0.8.5",
+  "production_credentials_read": false,
+  "real_messages_sent": 0,
+  "production_mcp_grants_created": 0,
+  "production_data_deleted": false,
+  "live_popup_recurrence_after_update": "not_verified",
+  "other_mac_or_os_user": "not_verified",
+  "slack_public_distribution": false,
+  "friend_ready": false,
+  "isolated_runtime": {
+    "checks": {
+      "--verify-runtime": {
+        "runtimeReady": true,
+        "mcp": true,
+        "xCrypto": true,
+        "systemTLS": true,
+        "version": "0.9.4"
+      },
+      "--verify-instagram-login": {
+        "instagramLoginReady": true
+      },
+      "--verify-slack-login": {
+        "slackLoginReady": true
+      },
+      "--verify-public-tls": {
+        "tlsVerified": true
+      },
+      "--release-status": {
+        "slackOAuthConfigured": false,
+        "slackClientId": "",
+        "slackRedirectUri": "",
+        "slackDistributionReady": false
+      }
+    },
+    "empty_home": true,
+    "os_path_only": true,
+    "developer_ca_unavailable": true,
+    "private_pipe_ping_providers": 5,
+    "duplicate_launch_fixed_error": true,
+    "database_created": false,
+    "keychain_isolation": "not_claimed_no_item_access"
+  }
+}

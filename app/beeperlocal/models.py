@@ -4,10 +4,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import re
 from typing import Any
 
-SUPPORTED_PROVIDERS = ("telegram", "slack", "matrix", "line", "instagram")
-PERSISTENCE_PROVIDERS = ("matrix", "slack", "line", "instagram")
+SUPPORTED_PROVIDERS = ("telegram", "slack", "matrix", "line", "instagram", "x", "messenger")
+PERSISTENCE_PROVIDERS = ("matrix", "slack", "line", "instagram", "x", "messenger")
 PROOF_PROVIDERS = ("matrix", "slack")
 MIN_CONNECTIVITY_MESSAGES = 1
 MIN_VOLUME_MESSAGES = 50
@@ -98,6 +99,8 @@ class UnifiedMessage:
     edited_at: datetime | None = None
     reply_to_message_id: str | None = None
     direction: str = "unknown"
+    media: dict[str, str] | None = field(default=None, repr=False)
+    attachments: list[dict[str, Any]] = field(default_factory=list, repr=False)
 
     def __post_init__(self) -> None:
         if self.provider not in SUPPORTED_PROVIDERS:
@@ -115,6 +118,20 @@ class UnifiedMessage:
             raise ValueError("invalid attachment count")
         if self.direction not in {"incoming", "outgoing", "unknown"}:
             raise ValueError("invalid direction")
+        if (not isinstance(self.attachments, list) or len(self.attachments) > 20
+                or any(not isinstance(a, dict) or a.get('kind') not in {'image', 'video', 'audio', 'file'}
+                       or not (isinstance(a.get('url'), str) or isinstance(a.get('media_hash_key'), str))
+                       or set(a) - {'kind', 'url', 'name', 'key', 'iv', 'sha256', 'mime', 'media_hash_key', 'key_version', 'file_id'}
+                       or any(not isinstance(v, str) or len(v) > 16384 for v in a.values()) for a in self.attachments)):
+            raise ValueError('invalid attachments')
+        if self.media is not None:
+            if (self.provider != "line" or not isinstance(self.media, dict)
+                    or self.media.get("kind") not in {"image", "sticker"}
+                    or set(self.media) - {"kind", "sticker_id"}
+                    or ("sticker_id" in self.media and (self.media["kind"] != "sticker"
+                        or not isinstance(self.media["sticker_id"], str)
+                        or not re.fullmatch(r"[0-9]{1,20}", self.media["sticker_id"])) )):
+                raise ValueError("invalid media")
 
     @property
     def id(self) -> str:

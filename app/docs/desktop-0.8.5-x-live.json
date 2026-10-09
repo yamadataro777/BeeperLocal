@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-02",
+  "mode": "signed_packaged_core",
+  "version": "0.8.5",
+  "send_calls": 0,
+  "status": "stopped",
+  "phase": "snapshot",
+  "code": "DESKTOP_ALREADY_RUNNING"
+}

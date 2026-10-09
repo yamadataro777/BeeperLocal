@@ -236,7 +236,7 @@ func (c *HTTPClient) MakeGraphQLRequest(ctx context.Context, name string, variab
 	//c.Logger.Info().Any("url", reqUrl).Any("payload", string(payloadBytes)).Any("headers", headers).Msg("Sending graphQL request.")
 	var resp *http.Response
 	var respData []byte
-	if name == "IGDirectTextSendMutation" {
+	if name == "IGDirectTextSendMutation" || name == "IGDirectMediaSendMutation" {
 		// BeeperLocal: ambiguous sends must not be retried or redirected.
 		resp, respData, err = c.MakeRequestOnceNoRedirect(ctx, reqUrl, "POST", headers, payloadBytes, types.FORM)
 	} else {

@@ -25,12 +25,14 @@ type Event struct {
 }
 
 type Watcher struct {
-	Manager *session.Manager
-	Lock    func() (func(), error)
-	Out     io.Writer
-	Err     io.Writer
-	FromNow bool
-	Limit   int
+	Manager      *session.Manager
+	Lock         func() (func(), error)
+	Out          io.Writer
+	Err          io.Writer
+	FromNow      bool
+	Limit        int
+	StatusEvents bool
+	lastStatus   string
 	// Hooks keep reconnection and cancellation tests independent of wall time.
 	ProbeInterval time.Duration
 	Wait          func(context.Context, time.Duration) error
@@ -72,7 +74,14 @@ func (w *Watcher) state(generation string) (*session.State, error) {
 
 // Run uses short session locks; the caller holds a separate singleton watch lock.
 // Output precedes checkpointing. A crash in between can replay the last event.
-func (w *Watcher) Run(ctx context.Context) error {
+func (w *Watcher) Run(ctx context.Context) (result error) {
+	defer func() {
+		if errors.Is(result, session.ErrSessionInvalidated) || line.IsLoggedOut(session.ProtocolError(result)) {
+			_ = w.status("logged_out", "LINE_SESSION_REVOKED")
+		} else if line.IsAuthError(session.ProtocolError(result)) {
+			_ = w.status("logged_out", "LINE_LOGIN_REQUIRED")
+		}
+	}()
 	if w.Wait == nil {
 		w.Wait = wait
 	}
@@ -166,6 +175,10 @@ func (w *Watcher) Run(ctx context.Context) error {
 				return
 			}
 			if kind == "ping" || kind == "connInfoRevision" {
+				callbackErr = w.status("ready", "")
+				if callbackErr != nil {
+					cancel()
+				}
 				recoveredStreamToken = ""
 				return
 			}
@@ -192,6 +205,9 @@ func (w *Watcher) Run(ctx context.Context) error {
 					return err
 				}
 				if err := ctx.Err(); err != nil {
+					return err
+				}
+				if err := w.status("ready", ""); err != nil {
 					return err
 				}
 				if err := encoder.Encode(event); err != nil {
@@ -226,6 +242,9 @@ func (w *Watcher) Run(ctx context.Context) error {
 			streamErr = eventError
 		}
 		if line.IsAuthError(streamErr) {
+			if err := w.status("reconnecting", ""); err != nil {
+				return err
+			}
 			err := w.locked(ctx, func() error {
 				s, err := w.state(generation)
 				if err != nil {
@@ -286,8 +305,27 @@ func (w *Watcher) Run(ctx context.Context) error {
 }
 
 func (w *Watcher) retry(ctx context.Context, delay time.Duration) error {
+	if err := w.status("reconnecting", ""); err != nil {
+		return err
+	}
 	fmt.Fprintf(w.Err, "LINE stream disconnected; reconnecting in %s…\n", delay)
 	return w.Wait(ctx, delay)
+}
+
+// Opt-in control events contain fixed state names only, never remote error text.
+func (w *Watcher) status(state, code string) error {
+	if !w.StatusEvents || state == w.lastStatus {
+		return nil
+	}
+	if err := json.NewEncoder(w.Out).Encode(struct {
+		Event string `json:"event"`
+		State string `json:"state"`
+		Code  string `json:"code,omitempty"`
+	}{"status", state, code}); err != nil {
+		return err
+	}
+	w.lastStatus = state
+	return nil
 }
 
 func wait(ctx context.Context, delay time.Duration) error {

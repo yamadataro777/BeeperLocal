@@ -1,0 +1,660 @@
+package twittermeow
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"regexp"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/PuerkitoBio/goquery"
+	"github.com/google/uuid"
+	"github.com/imroc/req/v3"
+	"github.com/rs/zerolog"
+	"go.mau.fi/util/exslices"
+
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/cookies"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/crypto"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/endpoints"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/payload"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/response"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/types"
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/methods"
+)
+
+type EventHandler func(evt types.TwitterEvent, inbox *response.TwitterInboxData) bool
+type StreamEventHandler func(evt response.StreamEvent)
+
+// ConversationDataCallback is called when conversation data is refreshed (e.g., during key refresh).
+// The callback receives the conversation ID and the inbox item containing the latest conversation data.
+type ConversationDataCallback func(ctx context.Context, conversationID string, item *response.XChatInboxItem)
+
+// XChatConnectHandler repairs missed events before normal live dispatch starts.
+type XChatConnectHandler func(ctx context.Context, drain XChatLiveDrain) error
+
+// XChatTokenTTL is how long an XChat token is considered valid.
+const XChatTokenTTL = 5 * time.Minute
+
+type cachedXChatToken struct {
+	Token     string
+	FetchedAt time.Time
+}
+
+type Client struct {
+	// Local adapter hook: transport-only socket hints. Bypasses the upstream
+	// processor; the independent supervisor verifies history with chat-xdk.
+	RawXChatHandler func(context.Context, *payload.Message) error
+	Logger  zerolog.Logger
+	cookies *cookies.Cookies
+	session *CachedSession
+	HTTP    *http.Client
+
+	defaultTransport http.RoundTripper
+
+	eventHandler              EventHandler
+	streamEventHandler        StreamEventHandler
+	xchatEventHandler         XChatEventHandler
+	onCursorChanged           func(ctx context.Context)
+	onConversationDataRefresh ConversationDataCallback
+	onXChatConnect            XChatConnectHandler
+	xchatConnectHandlerMu     sync.RWMutex
+
+	currentUserID  string
+	jot            *JotClient
+	polling        *PollingClient
+	stream         *StreamClient
+	xchat          *xchatWebsocketClient
+	xchatProcessor *XChatEventProcessor
+	keyManager     *crypto.KeyManager
+
+	jetfuelCastleTokens  []string
+	jetfuelCastleInfo    JetfuelCastleTokenInfo
+	browserHeaders       BrowserHeaders
+	jetfuelCastleTokenMu sync.Mutex
+	xchatToken           *cachedXChatToken
+	xchatTokenMu         sync.Mutex
+}
+
+const (
+	defaultHTTPTimeout = 60 * time.Second
+)
+
+func NewClient(cookies *cookies.Cookies, store crypto.KeyStore, logger zerolog.Logger) *Client {
+	defaultTransport := req.NewClient().ImpersonateChrome().DisableHTTP3().GetTransport()
+	cli := Client{
+		HTTP: &http.Client{
+			Transport: defaultTransport,
+			Timeout:   defaultHTTPTimeout,
+		},
+		defaultTransport: defaultTransport,
+		Logger:           logger,
+	}
+
+	cli.polling = cli.newPollingClient()
+	cli.stream = cli.newStreamClient()
+	cli.xchat = cli.newXChatWebsocketClient()
+	cli.jot = cli.newJotClient()
+	cli.cookies = cookies
+	cli.session = &CachedSession{
+		ClientUUID: uuid.NewString(),
+	}
+	cli.keyManager = crypto.NewKeyManager(store)
+	cli.xchatProcessor = newXChatEventProcessor(&cli)
+
+	return &cli
+}
+
+func (c *Client) GetCookieString() string {
+	return c.cookies.String()
+}
+
+func (c *Client) SetCookies(values map[string]string) {
+	for name, value := range values {
+		name = strings.TrimSpace(name)
+		value = strings.TrimSpace(value)
+		if name == "" || value == "" {
+			continue
+		}
+		c.cookies.Set(cookies.XCookieName(name), value)
+	}
+}
+
+func (c *Client) SetSession(sess *CachedSession) {
+	c.session = sess
+}
+
+func (c *Client) GetSession() *CachedSession {
+	return c.session
+}
+
+// GetKeyManager returns the key manager for cryptographic operations.
+func (c *Client) GetKeyManager() *crypto.KeyManager {
+	return c.keyManager
+}
+
+// GetXChatProcessor returns the XChat event processor.
+func (c *Client) GetXChatProcessor() *XChatEventProcessor {
+	return c.xchatProcessor
+}
+
+// SetKeyStore sets a custom KeyStore for persistent key storage.
+// This replaces the current KeyManager with a new one using the provided store.
+func (c *Client) SetKeyStore(store crypto.KeyStore) {
+	c.keyManager = crypto.NewKeyManager(store)
+}
+
+func (c *Client) SetLoginHTTPTransport(transport http.RoundTripper) {
+	if transport == nil {
+		c.HTTP.Transport = c.defaultTransport
+		c.HTTP.Timeout = defaultHTTPTimeout
+		return
+	}
+	c.HTTP.Transport = transport
+}
+
+// GetXChatToken returns a valid XChat token, refreshing if expired.
+func (c *Client) GetXChatToken(ctx context.Context) (string, error) {
+	c.xchatTokenMu.Lock()
+	defer c.xchatTokenMu.Unlock()
+
+	if c.xchatToken != nil && time.Since(c.xchatToken.FetchedAt) < XChatTokenTTL {
+		if token := strings.TrimSpace(c.xchatToken.Token); token != "" {
+			return token, nil
+		}
+		c.xchatToken = nil
+	}
+
+	resp, err := c.GenerateXChatToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	token := strings.TrimSpace(resp.Data.UserGetXChatAuthToken.Token)
+	if token == "" {
+		return "", errors.New("generated XChat token is empty")
+	}
+
+	c.xchatToken = &cachedXChatToken{
+		Token:     token,
+		FetchedAt: time.Now(),
+	}
+	return c.xchatToken.Token, nil
+}
+
+// refreshXChatToken forces a new token to be generated and updates the cache.
+func (c *Client) refreshXChatToken(ctx context.Context) (string, error) {
+	resp, err := c.GenerateXChatToken(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	token := strings.TrimSpace(resp.Data.UserGetXChatAuthToken.Token)
+	if token == "" {
+		return "", errors.New("generated XChat token is empty")
+	}
+	c.xchatTokenMu.Lock()
+	c.xchatToken = &cachedXChatToken{
+		Token:     token,
+		FetchedAt: time.Now(),
+	}
+	c.xchatTokenMu.Unlock()
+
+	return token, nil
+}
+
+func (c *Client) Connect(ctx context.Context) {
+	if c.eventHandler == nil {
+		panic(ErrConnectSetEventHandler)
+	}
+	c.StartXChatWebsocket(ctx)
+}
+
+func (c *Client) Disconnect() {
+	c.polling.stopPolling()
+	c.stream.stopStream()
+	c.stopXChatWebsocket()
+
+	timeoutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := c.polling.pollingStopped.Wait(timeoutCtx)
+	if err != nil {
+		c.Logger.Warn().Msg("Timed out waiting for polling to stop")
+	}
+	err = c.stream.streamStopped.Wait(timeoutCtx)
+	if err != nil {
+		c.Logger.Warn().Msg("Timed out waiting for stream to stop")
+		return
+	}
+	c.Logger.Debug().Msg("Polling and stream clients stopped")
+}
+
+// StartPolling starts the REST API polling for DM updates.
+// This is used for untrusted (message request) conversations that don't
+// receive real-time updates via XChat WebSocket.
+func (c *Client) StartPolling(ctx context.Context) {
+	if c.eventHandler == nil {
+		c.Logger.Warn().Msg("Cannot start polling without event handler")
+		return
+	}
+	c.polling.startPolling(c.Logger.WithContext(ctx))
+}
+
+// StopPolling stops the REST API polling.
+func (c *Client) StopPolling() {
+	c.polling.stopPolling()
+}
+
+func (c *Client) Logout(ctx context.Context) error {
+	defer c.cookies.Set(cookies.XAuthToken, "")
+	return c.loadPage(ctx, endpoints.BASE_LOGOUT_URL)
+}
+
+func (c *Client) LoadMessagesPage(ctx context.Context) (CurrentUserProfile, error) {
+	err := c.loadPage(ctx, endpoints.BASE_MESSAGES_URL)
+	if err != nil {
+		return CurrentUserProfile{}, fmt.Errorf("failed to load messages page: %w", err)
+	}
+
+	profile, err := c.GetCurrentUserProfile(ctx)
+	if err != nil {
+		if IsAuthError(err) {
+			return CurrentUserProfile{}, err
+		}
+		c.Logger.Warn().Err(err).Msg("Failed to fetch current user profile after loading messages page")
+		profile = CurrentUserProfile{ID: c.GetCurrentUserID()}
+	}
+
+	c.session.InitializedAt = time.Now()
+	c.session.CacheVersion = CurrentCacheVersion
+
+	logEvt := c.Logger.Info().Str("user_id", profile.ID)
+	if profile.ScreenName != "" {
+		logEvt = logEvt.Str("screen_name", profile.ScreenName)
+	}
+	logEvt.Msg("Successfully loaded and authenticated as user")
+
+	return profile, nil
+}
+
+func (c *Client) GetCurrentUserID() string {
+	if c.currentUserID != "" {
+		return c.currentUserID
+	}
+	twid := c.cookies.Get(cookies.XTwid)
+	return strings.Replace(strings.Replace(twid, "u%3D", "", -1), "u=", "", -1)
+}
+
+// SetCurrentUserID explicitly sets the user ID, bypassing cookie lookup.
+func (c *Client) SetCurrentUserID(userID string) {
+	c.currentUserID = strings.TrimSpace(userID)
+}
+
+func (c *Client) IsLoggedIn() bool {
+	return !c.cookies.IsCookieEmpty(cookies.XAuthToken)
+}
+
+func (c *Client) SetEventHandler(handler EventHandler, streamHandler StreamEventHandler, onCursorChanged func(context.Context)) {
+	c.eventHandler = handler
+	c.streamEventHandler = streamHandler
+	c.onCursorChanged = onCursorChanged
+}
+
+// SetXChatEventHandler sets the handler for processed XChat websocket events.
+func (c *Client) SetXChatEventHandler(handler XChatEventHandler) {
+	c.xchatEventHandler = handler
+	c.xchatProcessor.SetEventHandler(handler)
+}
+
+// SetConversationDataCallback sets the callback for conversation data refresh events.
+// This is called when conversation data is fetched on-demand (e.g., during key refresh).
+func (c *Client) SetConversationDataCallback(callback ConversationDataCallback) {
+	c.onConversationDataRefresh = callback
+}
+
+// SetXChatConnectHandler sets the catch-up hook that runs before each newly
+// established websocket starts consuming live frames.
+func (c *Client) SetXChatConnectHandler(handler XChatConnectHandler) {
+	c.xchatConnectHandlerMu.Lock()
+	c.onXChatConnect = handler
+	c.xchatConnectHandlerMu.Unlock()
+}
+
+func (c *Client) getXChatConnectHandler() XChatConnectHandler {
+	c.xchatConnectHandlerMu.RLock()
+	defer c.xchatConnectHandlerMu.RUnlock()
+	return c.onXChatConnect
+}
+
+// SetXChatGapHandler sets the per-conversation recovery hook used by the event
+// processor after reconnects and sequence discontinuities.
+func (c *Client) SetXChatGapHandler(handler XChatGapHandler) {
+	c.xchatProcessor.SetGapHandler(handler)
+}
+
+func (c *Client) fetchScript(ctx context.Context, url string) ([]byte, error) {
+	extraHeaders := map[string]string{
+		"accept":         "*/*",
+		"sec-fetch-site": "cross-site",
+		"sec-fetch-mode": "cors",
+		"sec-fetch-dest": "script",
+		"origin":         endpoints.BASE_URL,
+	}
+	_, scriptRespBody, err := c.MakeRequest(ctx, url, http.MethodGet, c.buildHeaders(HeaderOpts{Extra: extraHeaders, Referer: endpoints.BASE_URL + "/"}), nil, types.ContentTypeNone)
+	return scriptRespBody, err
+}
+
+func (c *Client) fetchCloudflareJSD(ctx context.Context, pageURL *url.URL, mainPageHTML string) error {
+	scriptURL := methods.ParseCloudflareJSDURL(mainPageHTML)
+	if scriptURL == "" {
+		return nil
+	}
+	parsedScriptURL, err := pageURL.Parse(scriptURL)
+	if err != nil {
+		return err
+	}
+	extraHeaders := map[string]string{
+		"accept":         "*/*",
+		"sec-fetch-dest": "script",
+		"sec-fetch-mode": "no-cors",
+		"sec-fetch-site": "same-origin",
+	}
+	originalCheckRedirect := c.HTTP.CheckRedirect
+	c.disableRedirects()
+	defer func() {
+		c.HTTP.CheckRedirect = originalCheckRedirect
+	}()
+	for i := 0; i < 4; i++ {
+		resp, _, err := c.MakeRequest(ctx, parsedScriptURL.String(), http.MethodGet, c.buildHeaders(HeaderOpts{
+			Extra:       extraHeaders,
+			Referer:     pageURL.String(),
+			WithCookies: true,
+		}), nil, types.ContentTypeNone)
+		if resp != nil {
+			c.cookies.UpdateFromResponse(resp)
+		}
+		if !errors.Is(err, ErrRedirectAttempted) {
+			return err
+		}
+		location := resp.Header.Get("Location")
+		if location == "" {
+			return err
+		}
+		parsedScriptURL, err = parsedScriptURL.Parse(location)
+		if err != nil {
+			return err
+		}
+	}
+	return ErrMaxRetriesReached
+}
+
+func (c *Client) fetchAndParseMainScript(ctx context.Context, scriptURL string) (string, error) {
+	scriptRespBody, err := c.fetchScript(ctx, scriptURL)
+	if err != nil {
+		return "", err
+	}
+	authTokenBytes := methods.ParseBearerToken(scriptRespBody)
+	authTokens := exslices.CastFunc(authTokenBytes, func(from []byte) string {
+		return string(from)
+	})
+	if len(authTokens) == 0 {
+		zerolog.Ctx(ctx).Warn().Msg("No bearer token found in main script, using default")
+	} else if len(authTokens) > 1 {
+		zerolog.Ctx(ctx).Warn().Strs("tokens", authTokens).Msg("Multiple bearer tokens found")
+		if !slices.Contains(authTokens, BearerToken) {
+			c.session.bearerToken = authTokens[0]
+		}
+	} else if authTokens[0] != BearerToken {
+		zerolog.Ctx(ctx).Warn().Str("bearer_token", authTokens[0]).
+			Msg("Hardcoded token doesn't match fetched one")
+		c.session.bearerToken = authTokens[0]
+	}
+	return methods.ParseOndemandSURLFromScript(scriptRespBody), nil
+}
+
+func (c *Client) fetchAndParseSScript(ctx context.Context, scriptURL string) (*[4]int, error) {
+	scriptRespBody, err := c.fetchScript(ctx, scriptURL)
+	if err != nil {
+		return nil, err
+	}
+
+	byteIndexes := methods.ParseVariableIndexes(scriptRespBody)
+	if len(byteIndexes) < 5 {
+		return nil, fmt.Errorf("failed to find variable indexes")
+	}
+	var indexes [4]int
+	for i := 0; i < 4; i++ {
+		index, err := strconv.Atoi(string(byteIndexes[i+1]))
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse variable index %d (%s): %w", i, byteIndexes[i+1], err)
+		}
+		indexes[i] = index
+	}
+	return &indexes, nil
+}
+
+var nonNumbers = regexp.MustCompile(`\D+`)
+
+func (c *Client) parseMainPageHTML(ctx context.Context, mainPageResp *http.Response, mainPageHTML string) error {
+	country := methods.ParseCountry(mainPageHTML)
+	if country == "" {
+		return fmt.Errorf("country code not found (HTTP %d)", mainPageResp.StatusCode)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(mainPageHTML))
+	if err != nil {
+		return fmt.Errorf("failed to parse main page html: %w", err)
+	}
+	verificationToken, ok := doc.Find("meta[name^=tw]").Attr("content")
+	if !ok {
+		return fmt.Errorf("failed to find meta tags in main page html")
+	}
+	var loadingAnims = new([4][16][11]int)
+	idx := 0
+	doc.Find("svg[id^=loading-x-anim]").Each(func(i int, svg *goquery.Selection) {
+		if idx >= 4 {
+			idx++
+			return
+		}
+		pathVal, ok := svg.Find("path").Eq(1).Attr("d")
+		if !ok {
+			return
+		}
+		sets := strings.Split(pathVal[9:], "C")
+		if len(sets) != 16 {
+			return
+		}
+		var numSets [16][11]int
+		for i, set := range sets {
+			numbers := strings.Split(strings.TrimSpace(nonNumbers.ReplaceAllString(set, " ")), " ")
+			if len(numbers) != 11 {
+				return
+			}
+			for j, num := range numbers {
+				parsed, err := strconv.Atoi(num)
+				if err != nil {
+					return
+				}
+				numSets[i][j] = parsed
+			}
+		}
+		loadingAnims[idx] = numSets
+		idx++
+	})
+	if idx != 4 {
+		c.Logger.Warn().Int("found_count", idx).Msg("Didn't find 4 loading animations in main page HTML")
+		loadingAnims = nil
+	} else {
+		c.Logger.Trace().
+			Str("verification_token", verificationToken).
+			Any("loading_animations", loadingAnims[:]).
+			Msg("Found loading animations and verification token")
+	}
+
+	for name, value := range methods.ParseDocumentCookieAssignments(mainPageHTML) {
+		c.cookies.Set(cookies.XCookieName(name), value)
+	}
+	if mainPageResp.Request != nil && mainPageResp.Request.URL != nil {
+		if err := c.fetchCloudflareJSD(ctx, mainPageResp.Request.URL, mainPageHTML); err != nil {
+			if IsClientHTTPError(err) {
+				return err
+			}
+			c.Logger.Debug().Err(err).Msg("Failed to fetch Cloudflare JSD bootstrap")
+		}
+	}
+
+	c.session.Country = country
+	c.session.VerificationToken = verificationToken
+	c.session.loadingAnims = loadingAnims
+	c.jetfuelCastleInfo = parseJetfuelCastleTokenInfo([]byte(mainPageHTML))
+	if !c.jetfuelCastleInfo.IsValid() {
+		c.Logger.Debug().
+			Bool("has_script_url", c.jetfuelCastleInfo.ScriptURL != "").
+			Bool("has_public_key", c.jetfuelCastleInfo.PublicKey != "").
+			Msg("X Castle web metadata not found in main page HTML")
+	}
+
+	guestToken := methods.ParseGuestToken(mainPageHTML)
+	if guestToken == "" {
+		if c.cookies.IsCookieEmpty(cookies.XGuestToken) && !c.IsLoggedIn() {
+			// most likely means your cookies are invalid / expired
+			return fmt.Errorf("guest token not found (HTTP %d)", mainPageResp.StatusCode)
+		}
+	} else {
+		c.cookies.Set(cookies.XGuestToken, guestToken)
+	}
+
+	mainScriptURL := methods.ParseMainScriptURL(mainPageHTML)
+	ondemandSURL := methods.ParseOndemandSURLFromScript([]byte(mainPageHTML))
+	if mainScriptURL == "" {
+		zerolog.Ctx(ctx).Warn().Int("status_code", mainPageResp.StatusCode).Msg("Main script URL not found in main page HTML")
+	} else if ondemandSURL == "" {
+		var fetchErr error
+		ondemandSURL, fetchErr = c.fetchAndParseMainScript(ctx, mainScriptURL)
+		if fetchErr != nil {
+			if IsClientHTTPError(fetchErr) {
+				return fetchErr
+			}
+			zerolog.Ctx(ctx).Warn().Err(fetchErr).Msg("Failed to fetch main script")
+		}
+	}
+
+	if ondemandSURL == "" {
+		c.Logger.Warn().Msg("ondemand.s URL not found in bootstrap sources")
+	} else if indexes, err := c.fetchAndParseSScript(ctx, ondemandSURL); err != nil {
+		if IsClientHTTPError(err) {
+			return err
+		}
+		c.Logger.Warn().Err(err).Msg("Failed to fetch and parse s script")
+	} else {
+		c.session.variableIndexes = indexes
+		c.Logger.Trace().
+			Any("variable_indexes", indexes[:]).
+			Msg("Found variable indexes")
+	}
+
+	c.calculateAnimationToken()
+
+	return nil
+}
+
+func (c *Client) performJotClientEvent(ctx context.Context, category payload.JotLoggingCategory, debug bool, body []interface{}) error {
+	if c.jot == nil {
+		return nil
+	}
+	return c.jot.sendClientLoggingEvent(ctx, category, debug, body)
+}
+
+func (c *Client) enableRedirects() {
+	c.HTTP.CheckRedirect = nil
+}
+
+func (c *Client) disableRedirects() {
+	c.HTTP.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return ErrRedirectAttempted
+	}
+}
+
+type apiRequestOpts struct {
+	URL              string
+	Referer          string
+	Origin           string
+	Method           string
+	Body             []byte
+	ContentType      types.ContentType
+	WithClientUUID   bool
+	Headers          map[string]string
+	DontReadResponse bool
+}
+
+func (c *Client) makeAPIRequest(ctx context.Context, opts apiRequestOpts) (*http.Response, []byte, error) {
+	clientTransactionID, err := crypto.SignTransaction(c.session.AnimationToken, c.session.VerificationToken, opts.URL, opts.Method)
+	if err != nil {
+		c.Logger.Trace().Err(err).Msg("Failed to create client transaction ID")
+		clientTransactionID = base64.RawStdEncoding.EncodeToString([]byte("e:"))
+	}
+
+	extraHeaders := map[string]string{
+		"x-client-transaction-id": clientTransactionID,
+		"accept":                  "*/*",
+		"sec-fetch-dest":          "empty",
+		"sec-fetch-mode":          "cors",
+		"sec-fetch-site":          "same-origin",
+	}
+	for k, v := range opts.Headers {
+		extraHeaders[k] = v
+	}
+
+	headerOpts := HeaderOpts{
+		WithAuthBearer:      true,
+		WithCookies:         true,
+		WithXTwitterHeaders: true,
+		WithXCsrfToken:      true,
+		Referer:             opts.Referer,
+		Origin:              opts.Origin,
+		Extra:               extraHeaders,
+		WithXClientUUID:     opts.WithClientUUID,
+	}
+	headers := c.buildHeaders(headerOpts)
+	var payload io.Reader
+	if opts.Body != nil {
+		payload = bytes.NewReader(opts.Body)
+	}
+
+	return c.MakeRequestFull(ctx, MakeRequestParams{
+		URL:          opts.URL,
+		Method:       opts.Method,
+		Headers:      headers,
+		Payload:      payload,
+		ContentType:  opts.ContentType,
+		DontReadBody: opts.DontReadResponse,
+	})
+}
+
+func (c *Client) SetActiveConversation(conversationID string) {
+	c.stream.startOrUpdateEventStream(conversationID)
+}
+
+// FetchRaw performs an authenticated request to the given URL and returns the response and body.
+// Useful for downloading blobs that still require the standard auth headers (cookies, bearer, etc).
+func (c *Client) FetchRaw(ctx context.Context, url string) (*http.Response, error) {
+	resp, _, err := c.makeAPIRequest(ctx, apiRequestOpts{
+		URL:            url,
+		Method:         http.MethodGet,
+		Origin:         endpoints.BASE_URL,
+		WithClientUUID: false,
+		Headers: map[string]string{
+			"accept": "*/*",
+		},
+		ContentType:      types.ContentTypeNone,
+		DontReadResponse: true,
+	})
+	return resp, err
+}

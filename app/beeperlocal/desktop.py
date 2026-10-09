@@ -24,11 +24,14 @@ from .reporting import default_state_dir, private_directory
 from .storage import EncryptedMessageStore, db_exists
 from .sync import recover_line_history
 from .desktop_control import DesktopControls
-from .desktop_profiles import DesktopProfiles, picture_version
+from .desktop_profiles import DesktopProfiles, profile_version
+from .desktop_media import DesktopMedia
+from .desktop_sync import DesktopSync
 from .mcp_access import default_settings
 from .receiver_retry import wait_for_retry
+from .outgoing_images import DesktopImageSending
 
-MAX_REQUEST_BYTES = 96 * 1024
+MAX_REQUEST_BYTES = 6 * 1024 * 1024
 OPAQUE_ID = re.compile(r"[a-f0-9]{64}\Z")
 
 
@@ -39,10 +42,13 @@ def open_store():
 
 def message_view(message):
     return {"id": message.id, "text": message.text or "", "sentAt": iso(message.sent_at),
-            "direction": message.direction, "attachmentCount": message.attachment_count}
+            "direction": message.direction, "attachmentCount": message.attachment_count,
+            "attachments": [{"index": i, "kind": a['kind'], "name": a.get('name', '')}
+                            for i, a in enumerate(message.attachments)],
+            **({"media": {"kind": message.media["kind"]}} if message.media else {})}
 
 
-class DesktopCore(DesktopControls, DesktopProfiles):
+class DesktopCore(DesktopImageSending, DesktopSync, DesktopControls, DesktopProfiles, DesktopMedia):
     provider = "line"
     history_limit = 100
     line_retry_interval = 60
@@ -51,6 +57,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
 
     def __init__(self, *, credentials=None, db_factory=open_store, connector_factory=LineConnector, emit=None):
         self.initialize_profiles()
+        self.initialize_media()
+        self.initialize_sync()
         self.credentials = credentials
         self.db_factory = db_factory
         self.connector_factory = connector_factory
@@ -110,7 +118,7 @@ class DesktopCore(DesktopControls, DesktopProfiles):
     def _current_records(self):
         records = self._records()
         catalog = self.db.private_get(self.catalog_key()) if self.account_id else None
-        if catalog is None: return records  # Upgrade: retain the old offline view until first refresh.
+        if catalog is None: return records  # No remote catalog snapshot has been fetched yet.
         if not isinstance(catalog, list) or any(not isinstance(item, str) or not OPAQUE_ID.fullmatch(item) for item in catalog):
             raise AppError("LOCAL_DB_CORRUPT")
         visible = set(catalog)
@@ -127,7 +135,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
     def _status(self):
         return {"connection": self.connection, "receiving": self.receiving,
                 "errorCode": self.error_code, "selectedId": self.selected_id,
-                "retryAttempt": self.retry_attempt, "storagePaused": self.settings["storagePaused"]}
+                "retryAttempt": self.retry_attempt, "storagePaused": self.settings["storagePaused"],
+                "sync": self.sync_state}
 
     def _notify(self, event, **values):
         self.emit({"event": event, **values})
@@ -146,20 +155,23 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             upstream = datetime.fromtimestamp(stamp / 1000, timezone.utc) if stamp else None
             newest = max([d for d in (upstream, last.sent_at if last else None) if d], default=None)
             views.append({"id": record.id, "title": record.conversation.title, "provider": self.provider,
+                          "kind": record.conversation.kind, "unreadCount": len(self.read_state(record.id)['unread']),
                           "preview": (last.text or "")[:100] if last and newest == last.sent_at else "",
-                          "avatarVersion": picture_version(record.conversation.locator.get("picture_path", "")),
+                          "avatarVersion": profile_version(self.provider, record.conversation.locator),
                           "lastMessageAt": iso(newest) if newest else None})
         views.sort(key=lambda c: (c["lastMessageAt"] is not None, c["lastMessageAt"] or "", c["id"]), reverse=True)
         pending = self.db.pending_outgoing(self.account_id, provider=self.provider) if self.account_id else []
         scoped = {r.conversation.id: r.id for r in records}
-        return {**self._status(), "conversations": views, "catalogLimited": len(records) >= 500,
+        return {**self._status(), "conversations": views, "unreadCount": sum(v['unreadCount'] for v in views),
+                "catalogLimited": getattr(self.connector, 'catalog_limited', len(records) >= 500),
                 "pendingSends": [{"requestId": r.request_id, "conversationId": scoped.get(r.conversation_id),
-                                   "text": r.text, "status": "unknown", "createdAt": iso(r.created_at)}
+                                   "text": r.text, "imageDigest": r.image_digest, "status": "unknown", "createdAt": iso(r.created_at)}
                                   for r in pending]}
 
     async def connect(self):
         self.require_no_login()
         self.require_storage()
+        await self.clear_media()
         await self.stop_watch()
         self.connection = "connecting"
         self.error_code = None
@@ -169,7 +181,7 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             await candidate.connect()
             self.connector = candidate
             self.account_id = candidate.account_id
-            choices = await candidate.list_conversations(500)
+            choices = await candidate.list_conversations(10000 if self.supports_all_sync() else 500)
             self.require_storage()
             records = [StoredConversation(self.provider, self.account_id, c) for c in choices]
             self.db.upsert_conversations(records)
@@ -185,6 +197,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             self.connection = "connected"
             if self.selected_id:
                 await self.sync_selected()
+                self.start_watch()
+            elif self.supports_all_sync():
                 self.start_watch()
             self._notify("status", **self._status())
             return self.snapshot()
@@ -206,8 +220,26 @@ class DesktopCore(DesktopControls, DesktopProfiles):
         if self.connection != "connected" or self.connector is None:
             raise AppError("DESKTOP_NOT_CONNECTED")
 
+    def invalidate_line_session(self, code):
+        if self.provider != 'line' or code not in {'LINE_SESSION_REVOKED', 'LINE_LOGIN_REQUIRED'}:
+            return False
+        self.watch_generation += 1
+        self.watch_ready.clear()
+        self.connection = self.receiving = 'error'
+        self.error_code = code
+        self.retry_attempt = 0
+        self.sync_state['mode'] = 'error'
+        current = asyncio.current_task()
+        for task in (self.watch_task, self.recovery_task, self.sync_task):
+            if task and task is not current:
+                task.cancel()
+        self._notify('status', **self._status())
+        return True
+
     async def select(self, identity):
         record = self._record(identity)
+        if identity != self.selected_id:
+            await self.clear_media()
         await self.stop_watch()
         if self.connection == "connected" and not self.settings["storagePaused"]:
             try:
@@ -233,13 +265,16 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             self.selected_id = record.id
         return self.messages(identity)
 
-    def messages(self, identity):
+    def messages(self, identity, before=None):
         record = self._record(identity)
-        rows = self.db.list_messages(self.provider, self.account_id, record.conversation.id, limit=100)
+        rows = self.db.list_messages(self.provider, self.account_id, record.conversation.id, limit=100, before=before)
         receipt = self.db.get_sync_receipt(record)
-        return {"conversationId": record.id, "messages": [message_view(m) for m in rows],
+        sync = self.db.private_get('sync.v1.' + identity, {})
+        return {"conversationId": record.id, "messages": [self.message_view(m) for m in rows],
+                "olderCursor": rows[0].id if len(rows) == 100 else None,
+                "sync": {k: sync[k] for k in ('backfill', 'complete', 'exhausted', 'coverage', 'lastSync') if k in sync},
                 "lastRecovery": iso(receipt.completed_at) if receipt else None,
-                "historyLimit": receipt.requested_limit if receipt else None,
+                    "historyLimit": receipt.requested_limit if receipt else None,
                 "historyLimited": True, "limitReached": receipt.history_limited if receipt else False}
 
     async def _fetch_selected_history(self):
@@ -276,6 +311,9 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             raise
 
     def start_watch(self):
+        self.require_connected()
+        if self.supports_all_sync():
+            self.start_all_sync()
         self.watch_generation += 1
         generation = self.watch_generation
         identity = self.selected_id
@@ -284,7 +322,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
         self.watch_ready = asyncio.Event()
         self.watch_task = asyncio.create_task(self._watch(generation, identity))
         # Bounded recovery also catches messages missed while the external cursor advanced.
-        self.recovery_task = asyncio.create_task(self._recover_periodically(generation, identity))
+        if identity:
+            self.recovery_task = asyncio.create_task(self._recover_periodically(generation, identity))
 
     async def _watch(self, generation, identity):
         attempts = 0
@@ -294,7 +333,7 @@ class DesktopCore(DesktopControls, DesktopProfiles):
             async def ready():
                 nonlocal started_at
                 await started.wait()
-                if self.watch_generation == generation:
+                if self.watch_generation == generation and started.is_set():
                     started_at = time.monotonic()
                     self.receiving = "waiting"
                     self.retry_attempt = 0
@@ -302,22 +341,39 @@ class DesktopCore(DesktopControls, DesktopProfiles):
                     self.watch_ready.set()
                     self._notify("status", **self._status())
             ready_task = asyncio.create_task(ready())
+            def status_changed(state):
+                nonlocal started_at
+                if generation != self.watch_generation or self.connection != 'connected':
+                    return
+                if state == 'ready':
+                    started_at = time.monotonic()
+                    self.receiving, self.error_code, self.retry_attempt = 'waiting', None, 0
+                    self.watch_ready.set()
+                else:
+                    self.receiving, self.error_code = 'reconnecting', 'LINE_WATCH_FAILED'
+                    self.watch_ready.clear()
+                self._notify('status', **self._status())
             try:
-                if attempts:
+                if attempts and self.selected_id:
                     await self.sync_selected()
-                async with aclosing(self.connector.watch(timeout=0, from_now=False, started=started)) as stream:
+                options = {'all_conversations': True} if self.supports_all_sync() else {}
+                if getattr(self.connector, 'supports_watch_status', False):
+                    options['status_changed'] = status_changed
+                async with aclosing(self.connector.watch(timeout=0, from_now=False, started=started, **options)) as stream:
                     async for message in stream:
                         if generation != self.watch_generation:
                             return
                         self.require_storage()
-                        record = self._record(identity)
+                        record = next((r for r in self._records() if r.conversation.id == message.conversation_id), None)
+                        if record is None:
+                            raise AppError('BAD_RESPONSE')
                         if (message.account_id, message.conversation_id) != (record.account_id, record.conversation.id):
                             raise AppError("BAD_RESPONSE")
-                        self.db.upsert([message], conversations=[record])
+                        self.ingest([message], records=[record])
                         attempts = self.retry_attempt = 0
                         self.receiving = "waiting"
                         self.error_code = None
-                        self._notify("messages_changed", conversationId=identity)
+                        self._notify("messages_changed", conversationId=record.id)
                 raise AppError("LINE_WATCH_FAILED")  # EOF is a disconnect, not successful indefinite watching.
             except asyncio.CancelledError:
                 raise
@@ -331,6 +387,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
                 if generation != self.watch_generation:
                     return
                 code = exc.code if isinstance(exc, AppError) else "UNEXPECTED_ERROR"
+                if self.invalidate_line_session(code):
+                    return
                 if started_at is not None and time.monotonic() - started_at >= 60:
                     attempts = 0
                 if code not in {"LINE_REQUEST_FAILED", "LINE_WATCH_FAILED", "NETWORK_ERROR"}:
@@ -373,6 +431,8 @@ class DesktopCore(DesktopControls, DesktopProfiles):
                 if generation != self.watch_generation:
                     return
                 code = exc.code if isinstance(exc, AppError) else "UNEXPECTED_ERROR"
+                if self.invalidate_line_session(code):
+                    return
                 if code not in {"LINE_REQUEST_FAILED", "NETWORK_ERROR"}:
                     self.receiving = "error"
                     self.error_code = code
@@ -389,13 +449,15 @@ class DesktopCore(DesktopControls, DesktopProfiles):
 
     async def stop_watch(self):
         self.watch_generation += 1
-        tasks = [t for t in (self.watch_task, self.recovery_task) if t]
+        tasks = [t for t in (self.watch_task, self.recovery_task, self.sync_task) if t]
         for task in tasks:
             task.cancel()
         for task in tasks:
             with suppress(asyncio.CancelledError):
                 await task
         self.watch_task = self.recovery_task = None
+        self.sync_task = None
+        self.sync_state['mode'] = 'stopped'
         self.receiving = "stopped"
         self.retry_attempt = 0
 
@@ -457,7 +519,9 @@ class DesktopCore(DesktopControls, DesktopProfiles):
         needle = query.strip().casefold()
         if not needle or len(needle) > 500:
             raise AppError("INVALID_INPUT")
-        records = {r.conversation.id: r for r in self._current_records()}
+        # A bounded remote catalog is not a deletion notice. Saved conversations
+        # outside its latest page must remain searchable for this account.
+        records = {r.conversation.id: r for r in self._records()}
         rows = self.db.recent_messages(provider=self.provider)
         results = []
         for message in rows:
@@ -465,7 +529,7 @@ class DesktopCore(DesktopControls, DesktopProfiles):
                 continue
             record = records[message.conversation_id]
             if needle in ((message.text or "") + "\n" + record.conversation.title).casefold():
-                results.append({**message_view(message), "conversationId": record.id, "title": record.conversation.title})
+                results.append({**self.message_view(message), "conversationId": record.id, "title": record.conversation.title})
                 if len(results) == 50:
                     break
         return {"results": results, "scanned": len(rows), "scanLimit": 10000}
@@ -477,23 +541,30 @@ class DesktopCore(DesktopControls, DesktopProfiles):
         schemas = {"ping": set(), "snapshot": set(), "connect": set(), "select": {"conversationId"},
                    "messages": {"conversationId"}, "refresh": set(), "stop": set(),
                    "search": {"query"}, "send": {"conversationId", "text", "requestId"},
+                   "send_image": {"conversationId", "dataUrl", "requestId"},
                    "management": set(), "mcp_configure": {"enabled", "port"},
                    "mcp_register": {"name", "conversationIds", "read", "send"},
                    "mcp_revoke": {"clientId"}, "storage_pause": {"paused"},
                    "storage_delete_preview": set(), "storage_delete": {"confirmation"},
                    "line_login_start": {"replace"}, "line_login_status": set(), "line_login_cancel": set(),
-                   "avatar": {"conversationId"}}
+                   "avatar": {"conversationId"}, "line_media": {"conversationId", "messageId", "retry"}}
+        schemas.update({"mark_read": {"conversationId", "throughMessageId"},
+                        "attachment_media": {"conversationId", "messageId", "index", "retry"},
+                        "messages_older": {"conversationId", "before"},
+                        "history_backfill": {"conversationId", "enabled"}})
         if operation not in schemas or set(request) != schemas[operation] | {"op"}:
             raise AppError("INVALID_INPUT")
         if operation == "ping":
-            return {"ready": True, "version": "0.8.3"}
+            return {"ready": True, "version": "0.9.5"}
         self._initialize()
         await self.restore_mcp()
         if operation == "line_login_status": return self.login_state
         if operation == "line_login_cancel": return await self.cancel_login()
         if operation == "line_login_start": return await self.start_login(request["replace"])
         if operation == "avatar": return self.avatar(request["conversationId"])
-        if operation in {"connect", "select", "refresh", "send", "mcp_configure", "storage_delete_preview", "storage_delete"}:
+        if operation == "line_media": return self.line_media(request["conversationId"], request["messageId"], request["retry"])
+        if operation == "attachment_media": return self.attachment_media(request['conversationId'], request['messageId'], request['index'], request['retry'])
+        if operation in {"connect", "select", "refresh", "send", "send_image", "mcp_configure", "storage_delete_preview", "storage_delete"}:
             self.require_no_login()
         if operation == "management": return self.management()
         if operation == "mcp_configure": return await self.configure_mcp(request["enabled"], request["port"])
@@ -506,14 +577,23 @@ class DesktopCore(DesktopControls, DesktopProfiles):
         if operation == "storage_delete": return await self.delete_local_data(request["confirmation"])
         if operation == "snapshot": return self.snapshot()
         if operation == "messages": return self.messages(request["conversationId"])
+        if operation == "messages_older": return self.messages(request['conversationId'], before=request['before'])
+        if operation == "mark_read": return self.mark_read(request['conversationId'], request['throughMessageId'])
+        if operation == "history_backfill": return self.backfill(request['conversationId'], request['enabled'])
         if operation == "search": return self.search(request["query"])
-        if operation in {"connect", "select", "refresh", "send"}:
+        if operation in {"connect", "select", "refresh", "send", "send_image"}:
             async with self.operation_lock:
-                if operation == "connect": return await self.connect()
-                if operation == "select": return await self.select(request["conversationId"])
-                if operation == "refresh": return await self.refresh()
-                return await self.send(request["conversationId"], request["text"], request["requestId"])
+                try:
+                    if operation == "connect": return await self.connect()
+                    if operation == "select": return await self.select(request["conversationId"])
+                    if operation == "refresh": return await self.refresh()
+                    if operation == "send_image": return await self.send_image(request['conversationId'], request['dataUrl'], request['requestId'])
+                    return await self.send(request["conversationId"], request["text"], request["requestId"])
+                except AppError as exc:
+                    self.invalidate_line_session(exc.code)
+                    raise
         if operation == "stop":
+            await self.clear_media()
             await self.stop_watch()
             self.connection = "offline"
             self._notify("status", **self._status())
@@ -534,34 +614,70 @@ def write_ipc(value):
     sys.stdout.flush()
 
 
-async def serve():
-    from .desktop_router import DesktopRouter
-    core = DesktopRouter(emit=write_ipc)
-    reader = asyncio.StreamReader(limit=MAX_REQUEST_BYTES)
-    protocol = asyncio.StreamReaderProtocol(reader)
-    transport, _ = await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, sys.stdin.buffer)
+async def serve_stream(reader, core, emit):
+    pending = set()
+
+    async def respond(raw):
+        request_id = None
+        try:
+            value = json.loads(raw)
+            if not isinstance(value, dict) or set(value) != {"id", "request"}:
+                raise AppError("INVALID_INPUT")
+            request_id = value["id"]
+            if type(request_id) is not int or not 0 <= request_id <= 2**53:
+                request_id = None
+                raise AppError("INVALID_INPUT")
+            result = await core.dispatch(value["request"])
+            emit({"id": request_id, "ok": True, "result": result})
+        except Exception as exc:
+            code = exc.code if isinstance(exc, AppError) else "UNEXPECTED_ERROR"
+            emit({"id": request_id, "ok": False, "error": code})
+
     try:
         while True:
             raw = await reader.readline()
             if not raw:
                 break
-            request_id = None
+            if len(raw) > MAX_REQUEST_BYTES:
+                emit({"id": None, "ok": False, "error": "INVALID_INPUT"})
+                continue
+            # Update preparation is a barrier: all accepted commands finish
+            # before receivers stop and the app bundle can be replaced.
             try:
-                value = json.loads(raw)
-                if not isinstance(value, dict) or set(value) != {"id", "request"}:
-                    raise AppError("INVALID_INPUT")
-                request_id = value["id"]
-                if type(request_id) is not int or not 0 <= request_id <= 2**53:
-                    request_id = None
-                    raise AppError("INVALID_INPUT")
-                result = await core.dispatch(value["request"])
-                write_ipc({"id": request_id, "ok": True, "result": result})
-            except Exception as exc:
-                code = exc.code if isinstance(exc, AppError) else "UNEXPECTED_ERROR"
-                write_ipc({"id": request_id, "ok": False, "error": code})
+                frame = json.loads(raw)
+                barrier = isinstance(frame, dict) and frame.get('request') == {'op': 'prepare_update'}
+            except (ValueError, UnicodeError):
+                barrier = False
+            if barrier:
+                await asyncio.gather(*tuple(pending))
+                await respond(raw)
+                continue
+            if len(pending) >= 64:
+                await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            task = asyncio.create_task(respond(raw))
+            pending.add(task)
+            task.add_done_callback(pending.discard)
+        await asyncio.gather(*tuple(pending))
+    finally:
+        for task in tuple(pending):
+            task.cancel()
+        await asyncio.gather(*tuple(pending), return_exceptions=True)
+
+
+async def serve():
+    from .desktop_router import DesktopRouter
+    from .credentials import start_desktop_keychain_session, end_desktop_keychain_session
+    start_desktop_keychain_session()
+    core = DesktopRouter(emit=write_ipc)
+    reader = asyncio.StreamReader(limit=MAX_REQUEST_BYTES)
+    protocol = asyncio.StreamReaderProtocol(reader)
+    transport, _ = await asyncio.get_running_loop().connect_read_pipe(lambda: protocol, sys.stdin.buffer)
+    try:
+        await serve_stream(reader, core, write_ipc)
     finally:
         transport.close()
         await core.close()
+        end_desktop_keychain_session()
 
 
 async def run_server():

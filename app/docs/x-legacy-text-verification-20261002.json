@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-02",
+  "installed_version": "0.8.5",
+  "legacy_text_fix_installed": true,
+  "cause": "Legacy plaintext DM events were previously excluded, leaving the timeline empty.",
+  "read_scope": "One-to-one text from envelopes with neither signature nor encryption marker; explicit legacy provenance and scoped stable identity.",
+  "chat_verification": "unchanged; signed/encrypted events never fall back to legacy parsing",
+  "live": {
+    "date": "2026-10-02",
+    "mode": "signed_packaged_core",
+    "version": "0.8.5",
+    "send_calls": 0,
+    "before_messages": 0,
+    "before_excluded_legacy": 2,
+    "connected": true,
+    "conversations": 181,
+    "history_messages": 1,
+    "legacy_message_count": 2,
+    "unsupported_legacy_count": 0,
+    "history_receipt_present": true,
+    "receive_waiting": true,
+    "reopened_offline": true,
+    "reopened_history_messages": 1,
+    "reopened_legacy_message_count": 2,
+    "reopened_search_matches": 1,
+    "reopened_selected_scope_match": true,
+    "status": "passed"
+  },
+  "live_record": "desktop-0.8.5-x-live-initial.json",
+  "installed_code_proof": {
+    "installed_legacy_crypto_matches_live_verified_build": true,
+    "installed_x_layers_match_tested": {
+      "beeperlocal.x_worker": true,
+      "beeperlocal.connectors.x": true,
+      "beeperlocal.desktop_x": true
+    },
+    "installed_parser_code_matches_tested": true,
+    "installed_line_media_preserved": true,
+    "installed_slack_profiles_preserved": true,
+    "additional_duplicate_counter_fix_in_installed_app": false,
+    "additional_duplicate_counter_fix_in_main_source": true,
+    "installed_core_sha256": "f9bff977085c583ec73b6a3166ba9cdd21bfece0a01458b89d0bc5d30f30a022"
+  },
+  "installed_code_record": "x-legacy-installed-code-20261002.json",
+  "validation": {
+    "latest_main_core_tests": 410,
+    "latest_main_core_status": "passed",
+    "isolated_x_core_tests": 381,
+    "isolated_x_ui_tests": 29,
+    "go_bridge": "passed",
+    "swift_self_test": "passed",
+    "shell_syntax_files": 6,
+    "offline_demo": "passed"
+  },
+  "installed_signature": {
+    "executables_verified": 6,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "installation": "The concurrent LINE media release installed 0.8.5 with the X text fix. This task verified its X bytecode and helper code hash, and preserved the installed LINE/Slack improvements.",
+  "native_gui_contents_observed": false,
+  "preserved_running_line_onboarding": true,
+  "send_calls": 0,
+  "additional_counter_fix": {
+    "main_source_applied": true,
+    "isolated_build_verified": true,
+    "installed": false,
+    "note": "Duplicate direct/wrapped envelopes are counted once after conflict checks. The current app can count one legacy message as two in its footer. This small follow-up awaits a subsequent main-source build; the running LINE re-link UI was preserved."
+  },
+  "isolated_candidate": {
+    "path": "/Users/haruotsuchiya/Desktop/BeeperLocal/workstreams/x-integration-work/legacy-fix-0.8.5",
+    "installed": false,
+    "baseline": "0.8.4",
+    "note": "Does not contain the concurrent LINE media and Slack profile release. Not used to replace the newer installed app."
+  }
+}

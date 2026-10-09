@@ -1,0 +1,19 @@
+{
+  "provider": "messenger",
+  "source": "source_core_with_signed_transport",
+  "observed_at_utc": "2026-10-02T12:27:25.115256+00:00",
+  "outbound_user_messages": 0,
+  "new_inbound_text": "not_proven_separately_from_import",
+  "native_gui": "not_tested",
+  "old_encrypted_backup": "unsupported",
+  "usual_app_replaced": false,
+  "core_started": true,
+  "connected": true,
+  "conversation_count": 2,
+  "saved_texts_in_display_window": 2,
+  "reconnected": true,
+  "result": "pass",
+  "restart_scope": "new_core_instance_same_python_process_separate_transport_processes",
+  "reopened_offline": true,
+  "reopen_search_matches": 1
+}

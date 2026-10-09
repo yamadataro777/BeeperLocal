@@ -225,6 +225,16 @@ class DesktopTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(SELF, json.dumps(result))
         self.assertEqual((await self.core.dispatch({"op": "search", "query": "hidden"}))["results"], [])
 
+    async def test_saved_conversation_outside_latest_catalog_remains_searchable(self):
+        await self.connect()
+        await self.core.dispatch({"op": "stop"})
+        self.core.db.private_put(self.core.catalog_key(), [self.other.id])
+        self.assertNotIn(self.record.id, [c['id'] for c in self.core.snapshot()['conversations']])
+        result = self.core.search(BODY)
+        self.assertEqual(result['results'][0]['conversationId'], self.record.id)
+        history = await self.core.dispatch({'op': 'select', 'conversationId': self.record.id})
+        self.assertEqual(history['messages'][0]['text'], BODY)
+
     async def test_unknown_commands_and_extra_arguments_are_rejected(self):
         for request in ({"op": "execute", "cmd": "anything"}, {"op": "snapshot", "path": "/tmp"},
                         {"op": "send", "conversationId": self.record.id, "text": BODY}):

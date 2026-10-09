@@ -1,0 +1,113 @@
+{
+  "version": "0.9.4",
+  "implementation": {
+    "notarization": "resumable_explicit_submission_with_artifact_binding_and_staple_gate",
+    "distribution": "default_refuses_unnotarized_or_unconfigured_slack_and_checks_extracted_zip",
+    "slack": "PKCE_existing_flow_with_scope_validation_and_fixed_provider_errors"
+  },
+  "tests": {
+    "python": 532,
+    "python_passed": true,
+    "targeted_ui": 19,
+    "targeted_ui_passed": true,
+    "offline_demo_passed": true,
+    "shell_syntax_files": 8,
+    "shell_syntax_passed": true,
+    "archive_publication_after_extraction_check": true,
+    "slack_native_self_test": true,
+    "messenger_beta_ui": 14,
+    "messenger_beta_ui_passed": true,
+    "frozen_core_tests": 45,
+    "frozen_core_modules": 43
+  },
+  "observed_gates": {
+    "old_093_unnotarized_app_rejected": true,
+    "no_distribution_output_created": true,
+    "missing_slack_config_build_rejected": true
+  },
+  "apple": {
+    "profile_requested": "notary-profile",
+    "authentication": "verified",
+    "uploaded": true,
+    "notarized": true,
+    "prepared": true,
+    "work_directory": ".local/notarization-0.9.4-keychain",
+    "submission_status": "Accepted",
+    "submission_id": "b4247af0-cbee-4e45-b9c0-e623557cf7db",
+    "archive_sha256": "e6b29c0b2f75cabcf991e8843afc846d6c13807ed388d944422ae3ea0ff0b213",
+    "distribution": {
+      "notarization": "accepted",
+      "ticket": "valid",
+      "gatekeeper": "accepted",
+      "team_id": "8FJAQT4D6B",
+      "cdhash": "e26a0196cca0d9db8dc7e0ec6905b8d4853b26a8"
+    }
+  },
+  "slack": {
+    "public_app_id": "A0C5L6H2Q8Y",
+    "public_client_id_observed": "11683442969584.12190221092304",
+    "server_configuration_changed": true,
+    "pending": "explicit_confirmation_for_beeperlocal_custom_callback",
+    "settings_draft": "beeperlocal://oauth/slack",
+    "pkce_enabled": true,
+    "token_rotation_enabled": true,
+    "user_scopes": 12,
+    "server_redirect": "http://localhost:28643/oauth/slack",
+    "public_distribution": false
+  },
+  "friend_ready": false,
+  "live_five_service_validation": "not_performed",
+  "frozen_core": {
+    "--verify-runtime": {
+      "exit": 0,
+      "result": {
+        "runtimeReady": true,
+        "mcp": true,
+        "xCrypto": true,
+        "systemTLS": true,
+        "version": "0.9.4"
+      }
+    },
+    "--verify-instagram-login": {
+      "exit": 0,
+      "result": {
+        "instagramLoginReady": true
+      }
+    },
+    "--verify-slack-login": {
+      "exit": 0,
+      "result": {
+        "slackLoginReady": true
+      }
+    },
+    "--verify-public-tls": {
+      "exit": 0,
+      "result": {
+        "tlsVerified": true
+      }
+    },
+    "--release-status": {
+      "exit": 0,
+      "result": {
+        "slackOAuthConfigured": false,
+        "slackClientId": "",
+        "slackRedirectUri": "",
+        "slackDistributionReady": false
+      }
+    }
+  },
+  "signature": {
+    "native_executables": 10,
+    "embedded_binaries": 85,
+    "verified": true
+  },
+  "macos_compatibility": {
+    "minimum_os": "13.0",
+    "verified": true
+  },
+  "source_requires_rebuild": false,
+  "usual_app_version": "0.9.4",
+  "usual_app_updated": true,
+  "messenger_selection_keychain_access_removed": true,
+  "live_popup_recurrence_after_update": "not_verified"
+}

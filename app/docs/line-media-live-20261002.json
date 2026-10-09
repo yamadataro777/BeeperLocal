@@ -1,0 +1,25 @@
+{
+  "core_version": "0.8.5",
+  "verification_method": "installed native GUI after user phone re-link",
+  "connection": "connected",
+  "receiver_waiting": true,
+  "image_preview_ready": true,
+  "image_previews_observed": 2,
+  "image_enlargement_verified": true,
+  "sticker_preview_ready": true,
+  "sticker_previews_observed": 1,
+  "sticker_enlargement_verified": true,
+  "original_conversation_restored": true,
+  "real_send_executed": false,
+  "private_content_logged": false,
+  "initial_attempt": {
+    "real_send_executed": false,
+    "image_preview_ready": false,
+    "sticker_preview_ready": false,
+    "conversations_inspected": 0,
+    "image_messages": 0,
+    "sticker_messages": 0,
+    "core_version": "0.8.5",
+    "error": "LINE_LOGIN_REQUIRED"
+  }
+}

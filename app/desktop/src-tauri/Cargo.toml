@@ -1,6 +1,6 @@
 [package]
 name = "beeperlocal-desktop"
-version = "0.8.3"
+version = "0.9.5"
 edition = "2021"
 
 [build-dependencies]
@@ -10,7 +10,12 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["process", "io-util", "sync", "time"] }
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros"] }
+tauri-plugin-updater = "2"
+tauri-plugin-notification = "2"
+
+[dev-dependencies]
+minisign-verify = "0.2.5"
 
 [profile.release]
 strip = true

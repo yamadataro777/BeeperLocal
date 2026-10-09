@@ -1,0 +1,42 @@
+{
+  "version": "0.8.5",
+  "date": "2026-10-02",
+  "python_tests": {
+    "passed": 401,
+    "skipped": 0
+  },
+  "ui_tests": {
+    "passed": 35,
+    "fixture_only": true,
+    "note": "34 passed in full suite; one new selector corrected and the remaining test passed on targeted rerun."
+  },
+  "go_packages_passed": [
+    "internal/messaging",
+    "internal/cli",
+    "internal/events"
+  ],
+  "shell_syntax": "passed",
+  "offline_demo": "passed",
+  "production_build": "passed",
+  "public_sticker_cdn_preview": "passed",
+  "signature": {
+    "mode": "release",
+    "executables_verified": 6,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "live": "passed: real photo and sticker previews and enlargement observed in installed GUI after user re-link",
+  "installed": true,
+  "real_send_executed": false,
+  "limits": [
+    "LINE 1-to-1 conversations only",
+    "Static sticker preview; no animation/audio/custom text rendering",
+    "Images fetched from latest 100 LINE messages with upstream 20 MiB bound",
+    "Preview bytes kept in bounded memory only; require connection again after restart",
+    "Expired/unavailable images keep a placeholder and retry button"
+  ],
+  "install_record": "line-media-install-20261002.json",
+  "live_record": "line-media-live-20261002.json",
+  "native_gui": "LINE connected, receiver waiting, 2 photo previews and 1 sticker preview observed; both enlarged successfully; original conversation restored"
+}

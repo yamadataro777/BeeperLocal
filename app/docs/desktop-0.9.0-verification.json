@@ -1,0 +1,91 @@
+{
+  "version": "0.9.0",
+  "date": "2026-10-03",
+  "tests": {
+    "python": 470,
+    "playwright_fixture": 56,
+    "final_history_ui_regression_rerun": 7,
+    "rust_ipc_and_signed_update": 4,
+    "go_instagram_adapter": true,
+    "go_messenger_adapter": true,
+    "go_x_bridge": true,
+    "shell_syntax_files": 6,
+    "offline_demo": true,
+    "production_build": true
+  },
+  "signature": {
+    "mode": "release",
+    "executables_verified": 8,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "isolated_runtime": {
+    "runtime_exit_zero": true,
+    "instagram_setup_exit_zero": true,
+    "slack_setup_exit_zero": true,
+    "empty_home": true,
+    "os_path_only": true,
+    "read_credentials": false
+  },
+  "architectures": {
+    "beeperlocal-ig": "arm64",
+    "beeperlocal-messenger": "arm64",
+    "beeperlocal-x": "arm64",
+    "line": "arm64",
+    "beeperlocal-core": "arm64",
+    "beeperlocal-desktop": "arm64",
+    "beeperlocal-x-login": "arm64",
+    "beeperlocal-messenger-login": "arm64"
+  },
+  "private_pipe_ping": true,
+  "bundled_setup_scripts": true,
+  "usual_app_version": "0.8.5",
+  "update_channel_configured": false,
+  "source_assets_checked": 23,
+  "configuration": {
+    "slack_public_client_id_configured": false,
+    "slack_pkce_real_browser_flow": "not_verified",
+    "update_endpoint_configured": false,
+    "update_public_key_configured": false,
+    "update_private_key_created": false,
+    "update_published": false,
+    "update_real_install": "not_verified"
+  },
+  "coverage": {
+    "all_conversation_sync": "acquired_catalog_with_provider_limits",
+    "unread": "local_to_this_mac",
+    "notifications": "opt_in_service_name_only",
+    "history_pagination": [
+      "instagram",
+      "slack",
+      "x"
+    ],
+    "line_history": "latest_provider_window_only",
+    "messenger_history": "received_and_saved_on_this_device_only",
+    "messenger_send": "one_to_one_text_fixture_verified_only",
+    "x_instagram_media": "received_image_video_audio_up_to_4_MiB",
+    "x_instagram_groups": "existing_member_conversations",
+    "local_deletion": [
+      "line",
+      "instagram",
+      "slack",
+      "x",
+      "messenger"
+    ],
+    "provider_deletion": "explicit_supported_events_only_not_complete_all_provider_sync"
+  },
+  "verification_notes": [
+    "PyInstaller semaphore creation was denied in the sandbox; offline checks passed with the permitted execution environment.",
+    "The isolated IPC probe required a resolved physical HOME path because storage rejects symlink ancestors; NDJSON replies and status events were parsed separately.",
+    "One early setup-helper probe returned failure; separate helper checks and two subsequent complete helper sequences passed without a product-code change."
+  ],
+  "real_messages_sent": 0,
+  "production_data_deleted": false,
+  "usual_app_replaced": false,
+  "notarization": "not_performed",
+  "other_mac_first_login": "not_verified",
+  "new_provider_paths_live_roundtrip": "not_verified",
+  "physical_sleep_network_soak": "not_verified",
+  "package_verification": "See the companion desktop-0.9.0-package-verification.json and ZIP .sha256; this build record is captured before ZIP creation."
+}

@@ -1,15 +1,26 @@
 # BeeperLocal — フォルダ案内
 
+**通常アプリを0.9.5へ更新済み:** Slackの専用URL・PKCE・12権限・トークン更新を保存し、他ワークスペースへの配布を有効化。公開Client IDをアプリへ同梱しました。Apple公証・公証チケット・Gatekeeper検査が成功。[配置記録](app/docs/desktop-0.9.5-install.json)、[検証範囲](app/docs/desktop-0.9.5-verification.json)。旧0.9.4はバックアップ済み。新しいSlack認証の完了と別Macでの5サービス実利用は未検証で、本人承認と実経路の確認が残ります。
+
+0.9.4で修正したMessenger会話切替時のKeychain書換え廃止と、起動中の重複アクセス抑止も含みます。[その変更と配置記録](app/docs/desktop-0.9.4-install.json)。
+
+[0.9.5の試用ZIP](dist/BeeperLocal-0.9.5-AppleSilicon-beta.zip)は、導入手順・対応ソース829ファイル・公証とSlack設定の検査記録を同梱。展開後の署名・チケット・Gatekeeper・空環境起動・ソース一致を確認済みです。[ZIP検証](app/docs/desktop-0.9.5-package-verification.json)。5サービスすべての新規利用実証を完了した配布判定とは区別します。
+
+**0.9.3の内部検証候補は過去成果物として保持:** 5サービスの画像送信、相手アイコンの保存、Instagram公式サイトでの本人確認、LINEログイン失効の表示を追加した候補です。[当時の修正と未検証範囲](app/docs/USER_FEEDBACK_0_9_3.md)。これらの変更は通常0.9.5にも含まれますが、実アカウントの画像着信は未検証です。
+
+開発方針は [AGENT.md](AGENT.md)。資料更新 → TDD → 最小実装 → 不要コード・資料矛盾の点検の順に進め、開発中の旧版互換・データ移行を維持しません。[今回の整理](app/docs/DEVELOPMENT_REVIEW_20261003.md)は開発ソースへ反映済みで、通常配置0.9.5と配布ZIPには未反映です。
+
 2026-10-01 に整理。ファイルは削除せず移動のみ（対応表は末尾）。
 
 | 場所 | 中身 |
 | --- | --- |
-| `BeeperLocal.app` | 普段起動するアプリ（Desktop 0.8.3、Developer ID署名済み） |
-| `app/` | 本体ソース（旧 `BeeperLocal_PoC_v0.4_Phase1`）。Python Core + Tauri/React + 同梱 line-cli / Instagram adapter |
+| `BeeperLocal.app` | 普段起動するアプリ（Desktop 0.9.5、Developer ID署名・公証済み） |
+| `app/` | 本体ソース（旧 `BeeperLocal_PoC_v0.4_Phase1`）。Python Core + Tauri/React + 同梱 LINE / Instagram / X / Messenger / Slack 接続部 |
 | `app/docs/PROJECT_STATE.md` | 実機検証の記録（source of truth） |
+| `dist/BeeperLocal-0.9.5-AppleSilicon-beta.zip` | 公証済み試用版。案内・対応ソース・検証結果を同梱。別Macで全5サービスの実利用は未検証 |
 | `docs/spec/` | 設計仕様 v0.1 と Codex 実装指示 |
 | `docs/handoff/` | ChatGPT からの引き継ぎメモ |
-| `workstreams/` | 本体に未統合・並行中の作業（X、Slack改善、LINE復旧、Instagram統合の作業コピー） |
+| `workstreams/` | 並行作業と統合前後の記録（Xは0.8.4で本体へ統合済み） |
 | `business/` | 販売サイト草案（Stripe）、申請文案、宣伝用スクリプト |
 | `tools/` | 補助スクリプト（Instagram接続.command） |
 | `archive/` | 旧アプリのバックアップ、統合前スナップショット、使い終わった適用スクリプト、壊れた空git |
@@ -19,7 +30,7 @@
 - 設計 v0.2: https://claude.ai/code/artifact/5603a8ed-451a-4fdf-baf9-7f4928ea6351
 - 販売リスク一覧: https://claude.ai/code/artifact/8781c933-8365-463a-8909-3dc78a31fcad
 
-AIエージェント向けの作業ルールは `CLAUDE.md`。
+AIエージェント向けの方針は [AGENT.md](AGENT.md)、作業案内は [CLAUDE.md](CLAUDE.md)。[AGENTS.md](AGENTS.md)から方針を参照します。
 
 ## 移動の対応表
 
@@ -37,6 +48,6 @@ AIエージェント向けの作業ルールは `CLAUDE.md`。
 
 ## 注意
 
-- `archive/old-verification-root/.git` は途中で止まった `git add` の残骸（コミット0件、約1.5GB、`index.lock` 残存）。不要なら削除してよい。
+- `archive/old-verification-root/.git` は途中で止まった `git add` の残骸（コミット0件、約1.5GB、`index.lock` 残存）。現行作業には不要。自動削除しない。
 - `workstreams/instagram-integration` と `workstreams/line-recovery-work/release-0.8.3` 内のシンボリックリンクは旧 `~/Documents/ChatGPT/...` を指しており、整理前から切れている。
 - 容量の大半はビルドキャッシュ（`app/desktop` 2.4GB、`app/.go-cache` 1GB、各 workstream の build/venv）。

@@ -545,6 +545,12 @@ def main(argv=None) -> int:
         os.umask(0o077)
     args = parser().parse_args(argv)
     try:
+        if getattr(args, "provider", None) == "messenger":
+            raise AppError("MESSENGER_DESKTOP_REQUIRED")
+        if getattr(args, "provider", None) == "x":
+            # X uses its own metadata/store and GUI onboarding; never route it
+            # through the old CLI's default provider Keychain or send path.
+            raise AppError("X_DESKTOP_REQUIRED")
         if getattr(args, "provider", None) == "slack" and args.command in {"send", "watch", "daemon"}:
             from .slack_cli import run_slack
             return asyncio.run(run_slack(args))

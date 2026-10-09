@@ -1,14 +1,11 @@
-# Development rules — BeeperLocal v0.4+
+# BeeperLocal 本体の作業指示
 
-1. Read `README.md`, `docs/PROJECT_STATE.md`, `docs/ADR_PHASE1_PERSISTENCE.md`, and `docs/SECURITY.md` first.
-2. Gate A (Matrix+Slack live connectivity/integration) was CLOSED on the user's Mac on 2026-09-27 with >=1 real message each. 50 messages is only Gate B volume/pagination.
-3. Never infer live success from mocks/demo. Preserve PROJECT_STATE evidence accurately.
-4. Never extract browser/Beeper credentials, use Discord self-bots, bypass provider authorization, or ask for secrets in chat.
-5. Provider credentials and local DB key must remain in native macOS Keychain; no file/env fallback.
-6. Message identity includes provider + account + conversation + provider-message ID.
-7. Message body/title/sender/provider-side identifiers must not be written plaintext to SQLite/FTS/log/report. Phase-1 SQLite payload is AES-256-GCM encrypted.
-8. Do not add plaintext FTS without a new security ADR. Current local search decrypts bounded rows in memory.
-9. A multi-provider `sync` failure must not silently persist a partial requested run.
-10. Run `python3 -B -m unittest discover -v`, shell syntax checks, and offline demo after changes. Separate local tests from Mac/live-provider evidence.
-11. Do not log raw SDK exceptions, API responses, tokens, message bodies, auth codes, or search queries.
-12. Before GUI work, close the Phase-1 live persistence/search loop and then implement incremental sync/reconciliation.
+[開発方針](../AGENT.md) を最初に読む。資料更新 → 必要なテストの失敗確認 → 最小実装 → 不要コード・資料矛盾の点検の順で、主担当だけで進める。開発中は旧版互換・データ移行を維持しない。
+
+- 現行仕様は `README.md` と `docs/NEXT_IMPLEMENTATION.md`、検証の証拠は `docs/PROJECT_STATE.md`。保存方式は `docs/ADR_PHASE1_PERSISTENCE.md` と `docs/SECURITY.md`。日付付き履歴を現在の作業指示として再実行しない。
+- Message identity includes provider + account + conversation + provider-message ID.
+- Provider credentials and DB keys remain in native macOS Keychain. No file/env fallback, credential extraction, authorization bypass, or unrequested ACL/key reset.
+- Message body/title/sender/provider-side identifiers must not be written plaintext to SQLite/FTS/log/report. Use AES-256-GCM encrypted payloads and bounded in-memory search; no plaintext FTS without a new security ADR.
+- A multi-provider sync failure must not silently persist a partial requested run. Preserve permission checks, outbox duplicate suppression, and commit-before-ACK ordering.
+- Never log raw SDK exceptions, API responses, tokens, auth codes, message bodies, or search queries. Never infer live success from fixtures/demo.
+- Core変更後は `.release-venv/bin/python -B -m unittest discover -v`、変更対象のshell構文検査とoffline demoを実行する。UI変更には対象画面テストとproduction buildを追加する。配布時の必須検査は `docs/DESKTOP_APP.md` に従う。コマンドには `rtk` を付ける。

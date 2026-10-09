@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-02",
+  "feature": "Slack display names and profile images",
+  "implementation": "COMPLETE",
+  "tests": {
+    "core_passed": 384,
+    "ui_passed": 32,
+    "profile_core_added": 10,
+    "profile_ui_added": 3,
+    "shell_syntax": "PASS",
+    "offline_demo": "PASS",
+    "production_build": "PASS"
+  },
+  "installed": {
+    "normal_app_version": "0.8.5",
+    "slack_core_code_matches_tested_build": {
+      "beeperlocal.slack_profiles": true,
+      "beeperlocal.desktop_slack": true,
+      "beeperlocal.connectors.slack": true
+    },
+    "deployment": "Included in the concurrent LINE media integration; this task did not overwrite that build.",
+    "native_gui_pixels_observed": false
+  },
+  "live": {
+    "send_attempts": 0,
+    "users_read": "MISSING",
+    "profile_lookup": "NOT_RUN",
+    "avatar_download": "NOT_RUN",
+    "account_verified": true
+  },
+  "limits": [
+    "Real profile lookup awaits users:read on the saved User OAuth token.",
+    "Real DM and other-person reply tests remain deferred by the user."
+  ],
+  "evidence_directory": "/Users/haruotsuchiya/Desktop/BeeperLocal/workstreams/slack-integration-work/profiles-20261002",
+  "source_sha256": {
+    "beeperlocal/connectors/slack.py": "baf730ca36617b81b095058de2f6275093e44bb5fbebeffa52203cf2e5ef2118",
+    "beeperlocal/desktop_slack.py": "dc3190c82a596cd8054b7f37950ed8839a8331fe17bf60a7050fbe1be4b7aac7",
+    "beeperlocal/desktop_profiles.py": "aacaf3bd21bed2ad8f6542a12f278a53b893147450ac3de8ca88286bffff17e5",
+    "desktop/src/Avatar.tsx": "625dd2627382221b8678c0d667d10bfe95f04a9b88e20d9f4e3b15dc58de3764",
+    "desktop/src/types.ts": "0ed5c32b1d785a243391dc0dbe184f9dbc96546611169de324ce6f6e3922091e",
+    "desktop/src/main.tsx": "8b50dfe2509bd003ebea19f55477a3926af8c4822f5850c56204fd6406ff18d9",
+    "desktop/src/fixture.ts": "119b138db7c2511cd3d1bdd741d380660db69eb2ccca3ce10c2fa30bec759ccc",
+    "desktop/src/style.css": "745f8752ff395689a2679cf9f567013e04e56961413c421c8643483c822542cc",
+    "desktop/src/SettingsPanel.tsx": "4fe318b673baddfc8f0f89784563bfbbb5d23a3a51143f2cb18a0f135507dc61",
+    "desktop/src-tauri/src/main.rs": "537b046a048e80f6f225e9674903bca204d395a2eb5d0f2ce7f730e89892863f",
+    "slack-send-app-manifest.json": "b21ea9e3a85d68bb290750c25fa5fc2078540e7a59c3184ca9d95f67c02d2eb1",
+    "beeperlocal/slack_profiles.py": "af9f92a4ea18cb3f07641738fb76a590da2ad7689b27341a08278e3193e6719a",
+    "desktop/src/SlackProfile.tsx": "3fef5c832f5839529a377f841a907cf7166c2853c4b4ce38bd9c9e08aba7cd69",
+    "tests/test_slack_profiles.py": "0e2dfb7179216e7bebb07f567e2604db0d59fdc0c5b0cb58a8e0d72f3b5f78d4",
+    "desktop/tests/slack-profiles.spec.ts": "01660ac35006a82b894cf699755597b934df7e7dbe6e9fad2df92f1d9878b31e"
+  }
+}

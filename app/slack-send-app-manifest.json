@@ -1,7 +1,7 @@
 {
   "display_information": {
-    "name": "BeeperLocal Slack Test",
-    "description": "Local user-authorized messaging integration test"
+    "name": "BeeperLocal PoC",
+    "description": "Local user-authorized messaging integration"
   },
   "oauth_config": {
     "scopes": {
@@ -14,12 +14,22 @@
         "im:history",
         "mpim:read",
         "mpim:history",
-        "chat:write"
+        "chat:write",
+        "users:read",
+        "files:read",
+        "files:write"
       ]
-    }
+    },
+    "pkce_enabled": true,
+    "redirect_urls": [
+      "beeperlocal://oauth/slack"
+    ]
   },
   "settings": {
     "org_deploy_enabled": false,
-    "socket_mode_enabled": false
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true,
+    "app_level_token_rotation_enabled": false,
+    "is_mcp_enabled": false
   }
 }

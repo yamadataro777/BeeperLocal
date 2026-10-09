@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "BeeperLocal",
-  "version": "0.8.3",
+  "version": "0.9.5",
   "identifier": "local.beeperlocal.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -22,16 +22,17 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'"
     }
   },
+  "plugins": { "updater": { "pubkey": "", "endpoints": [], "requireSignedVersion": true } },
   "bundle": {
     "active": true,
     "targets": [
       "app"
     ],
     "category": "SocialNetworking",
-    "shortDescription": "LINEとInstagramの会話を、このMacに。",
+    "shortDescription": "LINE・Instagram・Slack・Xの会話を、このMacに。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -41,17 +42,30 @@
     "externalBin": [
       "binaries/beeperlocal-core",
       "binaries/line",
-      "binaries/beeperlocal-ig"
+      "binaries/beeperlocal-ig",
+      "binaries/beeperlocal-x",
+      "binaries/beeperlocal-x-login",
+      "binaries/beeperlocal-messenger",
+      "binaries/beeperlocal-messenger-login",
+      "binaries/beeperlocal-instagram-login",
+      "binaries/beeperlocal-slack-login"
     ],
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "13.0"
     },
     "resources": [
+      "update-channel.json",
       "resources/LINE-CLI-LICENSE.txt",
+      "resources/PYTHON-LICENSE.txt",
       "resources/LINE-CLI-PROVENANCE.md",
       "resources/INSTAGRAM-LICENSE.txt",
       "resources/INSTAGRAM-LICENSE.exceptions",
-      "resources/INSTAGRAM-PROVENANCE.md"
+      "resources/INSTAGRAM-PROVENANCE.md",
+      "resources/X-THIRD-PARTY-NOTICES.txt",
+      "resources/X-PROVENANCE.md",
+      "resources/MESSENGER-PROVENANCE.md",
+      "resources/Instagram接続.command",
+      "resources/Slack接続.command"
     ]
   }
 }

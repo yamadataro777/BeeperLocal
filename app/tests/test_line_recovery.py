@@ -90,7 +90,7 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(db.get_sync_receipt(self.record))
 
     async def test_empty_and_media_only_history_recorded_without_live_success(self):
-        for rows, excluded in (([], 0), ([raw(content_type=7)], 1)):
+        for rows, excluded in (([], 0), ([raw(content_type=13)], 1)):
             with self.subTest(), self.db() as db:
                 receipt, stats = await recover_line_history(self.connector(rows=rows), db)
                 self.assertEqual(stats["processed"], 0)
@@ -130,18 +130,18 @@ class RecoveryTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AppError):
                 db.get_sync_receipt(self.record)
 
-    async def test_additive_table_keeps_old_message_ciphertext(self):
+    async def test_missing_receipt_table_is_rejected_without_changing_messages(self):
         message = normalize_line(raw(), SELF, CONV)
         with self.db() as db:
             db.upsert([message])
-            old = tuple(db.conn.execute("SELECT * FROM messages").fetchone())
             db.conn.execute("DROP TABLE sync_receipts")
             db.conn.commit()
-        with self.db() as db:
-            self.assertEqual(tuple(db.conn.execute("SELECT * FROM messages").fetchone()), old)
-            self.assertIsNone(db.get_sync_receipt(self.record))
-            await recover_line_history(self.connector(), db)
-            self.assertEqual(db.total_count(), 1)
+        before = self.path.read_bytes()
+        with self.assertRaises(AppError) as caught:
+            with self.db():
+                pass
+        self.assertEqual(caught.exception.code, "LOCAL_DB_SCHEMA_UNSUPPORTED")
+        self.assertEqual(self.path.read_bytes(), before)
 
 
 class RecoveryCLITests(unittest.TestCase):

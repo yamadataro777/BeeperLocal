@@ -1,0 +1,51 @@
+{
+  "version": "0.8.4",
+  "date": "2026-10-02",
+  "offline": {
+    "core_passed": 374,
+    "core_execution": "Full suite from final app source: 374 passed, zero skipped",
+    "ui_passed": 28,
+    "ui_execution": "Full suite from final app source: 28 passed",
+    "x_crypto_tests_in_core": 30,
+    "go_bridge": "passed",
+    "swift_native_self_test": "passed",
+    "shell_syntax_files": 6,
+    "offline_demo": "passed"
+  },
+  "live": {
+    "standalone_prior_verified": true,
+    "desktop_integration": {
+      "date": "2026-10-02",
+      "mode": "signed_packaged_core",
+      "send_calls": 0,
+      "connected": true,
+      "conversations": 181,
+      "history_messages": 7,
+      "unsupported_legacy_count": 2,
+      "history_receipt_present": true,
+      "receive_waiting": true,
+      "reopened_offline": true,
+      "reopened_search_matches": 1,
+      "reopened_scope_match": true,
+      "status": "passed"
+    },
+    "send_posts_this_integration": 0,
+    "integrated_new_incoming_and_send": "not_tested",
+    "native_gui": {
+      "app_running": true,
+      "core_running": true,
+      "app_processes": 1,
+      "core_processes": 2,
+      "window_contents_observed": false
+    }
+  },
+  "signature": {
+    "mode": "release",
+    "executables_verified": 6,
+    "embedded_binaries_verified": 68,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "installed": true,
+  "install_record": "desktop-0.8.4-install.json"
+}

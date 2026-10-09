@@ -1,0 +1,474 @@
+package payload
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/url"
+
+	"go.mau.fi/mautrix-twitter/pkg/twittermeow/data/endpoints"
+)
+
+type GraphQLPayload struct {
+	Variables interface{} `json:"variables,omitempty"`
+	QueryID   string      `json:"queryId,omitempty"`
+}
+
+func (p *GraphQLPayload) Encode() ([]byte, error) {
+	return json.Marshal(p)
+}
+
+// SendDirectMessagePayload is used for sending messages via the REST API (for untrusted conversations)
+type SendDirectMessagePayload struct {
+	ConversationID           string `json:"conversation_id,omitempty"`
+	MediaID                  string `json:"media_id,omitempty"`
+	ReplyToDMID              string `json:"reply_to_dm_id,omitempty"`
+	RecipientIDs             bool   `json:"recipient_ids"`
+	RequestID                string `json:"request_id,omitempty"`
+	Text                     string `json:"text"`
+	CardsPlatform            string `json:"cards_platform,omitempty"`
+	IncludeCards             int    `json:"include_cards,omitempty"`
+	IncludeQuoteCount        bool   `json:"include_quote_count"`
+	DMUsers                  bool   `json:"dm_users"`
+	AudioOnlyMediaAttachment bool   `json:"audio_only_media_attachment"`
+}
+
+func (p *SendDirectMessagePayload) Encode() ([]byte, error) {
+	return json.Marshal(p)
+}
+
+type SendTypingNotificationVariables struct {
+	ConversationID string `json:"conversationId,omitempty"`
+}
+
+type DMMessageDeleteMutationVariables struct {
+	MessageID string `json:"messageId,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
+}
+
+// DeleteMessageActionType represents the action type for message deletion in the JSON API
+type DeleteMessageActionType string
+
+const (
+	DeleteMessageActionTypeForSelf DeleteMessageActionType = "DeleteForSelf"
+	DeleteMessageActionTypeForAll  DeleteMessageActionType = "DeleteForAll"
+)
+
+// DeleteMessageActionSignature represents the signature for a delete action
+type DeleteMessageActionSignature struct {
+	MessageID                 string                           `json:"message_id"`
+	EncodedMessageEventDetail string                           `json:"encoded_message_event_detail"`
+	SignaturePayload          string                           `json:"signature_payload,omitempty"`
+	MessageEventSignature     *DeleteMessageEventSignatureJSON `json:"message_event_signature,omitempty"`
+}
+
+// DeleteMessageEventSignatureJSON is the JSON representation of a message event signature for delete
+type DeleteMessageEventSignatureJSON struct {
+	Signature        string `json:"signature"`
+	PublicKeyVersion string `json:"public_key_version"`
+	SignatureVersion string `json:"signature_version"`
+}
+
+// DeleteMessageMutationVariables contains the variables for the DeleteMessageMutation
+type DeleteMessageMutationVariables struct {
+	SequenceIDs         []string                       `json:"sequence_ids"`
+	ConversationID      string                         `json:"conversation_id"`
+	DeleteMessageAction DeleteMessageActionType        `json:"delete_message_action"`
+	ActionSignatures    []DeleteMessageActionSignature `json:"action_signatures"`
+}
+
+// DeleteMessageMutationPayload is the full payload for the DeleteMessageMutation GraphQL request
+type DeleteMessageMutationPayload struct {
+	OperationName string                         `json:"operationName"`
+	Variables     DeleteMessageMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions               `json:"extensions"`
+}
+
+// NewDeleteMessageMutationPayload creates a new DeleteMessageMutationPayload with default extensions
+func NewDeleteMessageMutationPayload(vars DeleteMessageMutationVariables) *DeleteMessageMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = "4gsDQKEmYkOtvsSIpHXdQA"
+	return &DeleteMessageMutationPayload{
+		OperationName: "DeleteMessageMutation",
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+// MuteConversationMutationVariables contains the variables for the MuteConversation mutation
+type MuteConversationMutationVariables struct {
+	ConversationIDs  []string                       `json:"conversationIds"`
+	ActionSignatures []DeleteMessageActionSignature `json:"action_signatures"`
+}
+
+// MuteConversationMutationPayload is the full payload for the MuteConversation GraphQL request
+type MuteConversationMutationPayload struct {
+	OperationName string                            `json:"operationName"`
+	Variables     MuteConversationMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions                  `json:"extensions"`
+}
+
+// NewMuteConversationMutationPayload creates a new MuteConversationMutationPayload with default extensions
+func NewMuteConversationMutationPayload(vars MuteConversationMutationVariables) *MuteConversationMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = "Dy7geJg7CL5dqhsl6QBteg"
+	return &MuteConversationMutationPayload{
+		OperationName: "MuteConversation",
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+// UnmuteConversationMutationVariables contains the variables for the UnmuteConversation mutation
+type UnmuteConversationMutationVariables struct {
+	ConversationIDs  []string                       `json:"conversationIds"`
+	ActionSignatures []DeleteMessageActionSignature `json:"action_signatures"`
+}
+
+// UnmuteConversationMutationPayload is the full payload for the UnmuteConversation GraphQL request
+type UnmuteConversationMutationPayload struct {
+	OperationName string                              `json:"operationName"`
+	Variables     UnmuteConversationMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions                    `json:"extensions"`
+}
+
+// NewUnmuteConversationMutationPayload creates a new UnmuteConversationMutationPayload with default extensions
+func NewUnmuteConversationMutationPayload(vars UnmuteConversationMutationVariables) *UnmuteConversationMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = "LnNSeGu4vnbwqXAvh7OlGQ"
+	return &UnmuteConversationMutationPayload{
+		OperationName: "UnmuteConversation",
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+// DeleteConversationMutationVariables contains the variables for the ConversationDeletion mutation
+type DeleteConversationMutationVariables struct {
+	ConversationID   string                         `json:"conversation_id"`
+	ActionSignatures []DeleteMessageActionSignature `json:"action_signatures"`
+}
+
+// DeleteConversationMutationPayload is the full payload for the ConversationDeletion GraphQL request
+type DeleteConversationMutationPayload struct {
+	OperationName string                              `json:"operationName"`
+	Variables     DeleteConversationMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions                    `json:"extensions"`
+}
+
+// NewDeleteConversationMutationPayload creates a new DeleteConversationMutationPayload with default extensions
+func NewDeleteConversationMutationPayload(vars DeleteConversationMutationVariables) *DeleteConversationMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = "9nsAnKrQvpifR3UmdtIdOg"
+	return &DeleteConversationMutationPayload{
+		OperationName: "ConversationDeletion",
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+// AddXChatPublicKeyMutationVariables contains the variables for the AddXChatPublicKey mutation.
+type AddXChatPublicKeyMutationVariables struct {
+	Version         string                 `json:"version"`
+	GenerateVersion bool                   `json:"generate_version"`
+	PublicKey       AddXChatPublicKeyInput `json:"public_key"`
+}
+
+type AddXChatPublicKeyRegistrationMethod string
+
+const (
+	AddXChatPublicKeyRegistrationMethodCustomPin AddXChatPublicKeyRegistrationMethod = "CustomPin"
+)
+
+// AddXChatPublicKeyInput contains the key material and registration method.
+type AddXChatPublicKeyInput struct {
+	PublicKey                  string                              `json:"public_key"`
+	SigningPublicKey           string                              `json:"signing_public_key"`
+	IdentityPublicKeySignature string                              `json:"identity_public_key_signature"`
+	RegistrationMethod         AddXChatPublicKeyRegistrationMethod `json:"registration_method"`
+}
+
+// AddXChatPublicKeyMutationPayload is the full payload for the AddXChatPublicKey GraphQL request.
+type AddXChatPublicKeyMutationPayload struct {
+	OperationName string                             `json:"operationName"`
+	Variables     AddXChatPublicKeyMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions                   `json:"extensions"`
+}
+
+const (
+	addXChatPublicKeyMutationOperationName = "AddXChatPublicKeyMutation"
+)
+
+// NewAddXChatPublicKeyMutationPayload creates a new AddXChatPublicKeyMutationPayload with default extensions.
+func NewAddXChatPublicKeyMutationPayload(vars AddXChatPublicKeyMutationVariables) *AddXChatPublicKeyMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = endpoints.ADD_XCHAT_PUBLIC_KEY_MUTATION_HASH
+	return &AddXChatPublicKeyMutationPayload{
+		OperationName: addXChatPublicKeyMutationOperationName,
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+type LabelType string
+
+const (
+	LABEL_TYPE_PINNED LabelType = "Pinned"
+)
+
+type PinAndUnpinConversationVariables struct {
+	ConversationID string    `json:"conversation_id,omitempty"`
+	LabelType      LabelType `json:"label_type,omitempty"`
+	Label          LabelType `json:"label,omitempty"`
+}
+
+type AddParticipantsPayload struct {
+	ConversationID    string   `json:"conversationId"`
+	AddedParticipants []string `json:"addedParticipants"`
+}
+
+type ReactionActionPayload struct {
+	ConversationID string   `json:"conversationId"`
+	MessageID      string   `json:"messageId"`
+	ReactionTypes  []string `json:"reactionTypes"`
+	EmojiReactions []string `json:"emojiReactions"`
+}
+
+func (p *ReactionActionPayload) Encode() ([]byte, error) {
+	return json.Marshal(p)
+}
+
+type PushNotificationSettings struct {
+	Addressbook     string `json:"AddressbookSetting,omitempty"`
+	Ads             string `json:"AdsSetting,omitempty"`
+	DirectMessages  string `json:"DirectMessagesSetting,omitempty"`
+	DMReaction      string `json:"DmReactionSetting,omitempty"`
+	FollowersNonVit string `json:"FollowersNonVitSetting,omitempty"`
+	FollowersVit    string `json:"FollowersVitSetting,omitempty"`
+	LifelineAlerts  string `json:"LifelineAlertsSetting,omitempty"`
+	LikesNonVit     string `json:"LikesNonVitSetting,omitempty"`
+	LikesVit        string `json:"LikesVitSetting,omitempty"`
+	LiveVideo       string `json:"LiveVideoSetting,omitempty"`
+	Mentions        string `json:"MentionsSetting,omitempty"`
+	Moments         string `json:"MomentsSetting,omitempty"`
+	News            string `json:"NewsSetting,omitempty"`
+	PhotoTags       string `json:"PhotoTagsSetting,omitempty"`
+	Recommendations string `json:"RecommendationsSetting,omitempty"`
+	Retweets        string `json:"RetweetsSetting,omitempty"`
+	Spaces          string `json:"SpacesSetting,omitempty"`
+	Topics          string `json:"TopicsSetting,omitempty"`
+	Tweets          string `json:"TweetsSetting,omitempty"`
+}
+
+type WebPushConfigPayload struct {
+	Token  string `json:"token"`
+	P256DH string `json:"encryption_key1"`
+	Auth   string `json:"encryption_key2"`
+
+	OSVersion string `json:"os_version"`
+	UDID      string `json:"udid"`
+	Locale    string `json:"locale"`
+
+	Env             int `json:"env"`
+	ProtocolVersion int `json:"protocol_version"`
+
+	Checksum string                    `json:"checksum,omitempty"`
+	Settings *PushNotificationSettings `json:"settings,omitempty"`
+}
+
+type PushConfigPayloadWrapper struct {
+	PushDeviceInfo *WebPushConfigPayload `json:"push_device_info"`
+}
+
+type SendMessageMutationVariables struct {
+	ConversationID               string  `json:"conversation_id"`
+	MessageID                    string  `json:"message_id"`
+	ConversationToken            string  `json:"conversation_token"`
+	EncodedMessageCreateEvent    string  `json:"encoded_message_create_event"`
+	EncodedMessageEventSignature *string `json:"encoded_message_event_signature,omitempty"`
+}
+
+type SendMessageMutationPayload struct {
+	OperationName string                       `json:"operationName"`
+	Variables     SendMessageMutationVariables `json:"variables"`
+	Extensions    ApolloExtensions             `json:"extensions"`
+	QueryId       string                       `json:"queryId,omitempty"`
+}
+
+func NewSendMessageMutationPayload(vars SendMessageMutationVariables) *SendMessageMutationPayload {
+	ext := DefaultApolloExtensions()
+	ext.PersistedQuery.Sha256Hash = "LkAIEchf8AGj-WgeLoTVcw"
+	return &SendMessageMutationPayload{
+		OperationName: "SendMessageMutation",
+		Variables:     vars,
+		Extensions:    ext,
+	}
+}
+
+type GenerateXChatTokenMutationPayload struct {
+	Variables  string         `json:"variables"`
+	Features   map[string]any `json:"features,omitempty"`
+	Extensions struct {
+		PersistedQuery struct {
+			Version    int    `json:"version"`
+			Sha256Hash string `json:"sha256Hash"`
+		} `json:"persistedQuery"`
+	} `json:"extensions"`
+}
+
+func (p *GenerateXChatTokenMutationPayload) Default() *GenerateXChatTokenMutationPayload {
+	p.Variables = "{}"
+	p.Extensions.PersistedQuery.Version = 1
+	return p
+}
+
+// ApolloExtensions - reusable struct for Apollo-style GraphQL persisted queries
+type ApolloExtensions struct {
+	PersistedQuery struct {
+		Version    int    `json:"version"`
+		Sha256Hash string `json:"sha256Hash"`
+	} `json:"persistedQuery"`
+	ClientLibrary struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+	} `json:"clientLibrary"`
+}
+
+// DefaultApolloExtensions returns ApolloExtensions with default values
+func DefaultApolloExtensions() ApolloExtensions {
+	return ApolloExtensions{
+		PersistedQuery: struct {
+			Version    int    `json:"version"`
+			Sha256Hash string `json:"sha256Hash"`
+		}{Version: 1},
+		ClientLibrary: struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		}{Name: "apollo-kotlin", Version: "4.3.3"},
+	}
+}
+
+// InitializeXChatMediaUploadPayload for the InitializeXChatMediaUpload GraphQL request
+type InitializeXChatMediaUploadPayload struct {
+	OperationName string                              `json:"operationName"`
+	Variables     InitializeXChatMediaUploadVariables `json:"variables"`
+	Extensions    ApolloExtensions                    `json:"extensions"`
+}
+
+type InitializeXChatMediaUploadVariables struct {
+	ConversationID string `json:"conversation_id"`
+	MessageID      string `json:"message_id"`
+	TotalBytes     string `json:"total_bytes"`
+}
+
+func (p *InitializeXChatMediaUploadPayload) Default() *InitializeXChatMediaUploadPayload {
+	p.OperationName = "InitializeXChatMediaUpload"
+	p.Extensions = DefaultApolloExtensions()
+	return p
+}
+
+// FinalizeXChatMediaUploadPayload for the FinalizeXChatMediaUpload GraphQL request
+type FinalizeXChatMediaUploadPayload struct {
+	OperationName string                            `json:"operationName"`
+	Variables     FinalizeXChatMediaUploadVariables `json:"variables"`
+	Extensions    ApolloExtensions                  `json:"extensions"`
+}
+
+type FinalizeXChatMediaUploadVariables struct {
+	ConversationID string  `json:"conversation_id"`
+	MessageID      string  `json:"message_id"`
+	MediaHashKey   string  `json:"media_hash_key"`
+	ResumeID       string  `json:"resume_id"`
+	NumParts       string  `json:"num_parts"`
+	TTLMsec        *string `json:"ttl_msec"`
+}
+
+func (p *FinalizeXChatMediaUploadPayload) Default() *FinalizeXChatMediaUploadPayload {
+	p.OperationName = "FinalizeXChatMediaUpload"
+	p.Extensions = DefaultApolloExtensions()
+	return p
+}
+
+type GetConversationPageQuerySettings struct {
+	InboxConversationEventLimit int `json:"inbox_conversation_event_limit"`
+	InboxConversationLimit      int `json:"inbox_conversation_limit"`
+	ConversationEventLimit      int `json:"conversation_event_limit"`
+	UserEventLimit              int `json:"user_event_limit"`
+}
+
+func DefaultGetConversationPageQuerySettings() *GetConversationPageQuerySettings {
+	return &GetConversationPageQuerySettings{
+		InboxConversationEventLimit: 5,
+		InboxConversationLimit:      20,
+		ConversationEventLimit:      200,
+		UserEventLimit:              500,
+	}
+}
+
+// GetConversationPageQueryVariables is the JSON body for the GetConversationPageQuery endpoint.
+type GetConversationPageQueryVariables struct {
+	ConversationID            string                            `json:"conversation_id"`
+	MinLocalSequenceID        string                            `json:"min_local_sequence_id,omitempty"`
+	MinConversationKeyVersion string                            `json:"min_conversation_key_version,omitempty"`
+	QuerySettings             *GetConversationPageQuerySettings `json:"query_settings,omitempty"`
+}
+
+func NewGetConversationPageQueryVariables(conversationID, minLocalSequenceID, minConversationKeyVersion string, settings *GetConversationPageQuerySettings) *GetConversationPageQueryVariables {
+	if settings == nil {
+		settings = DefaultGetConversationPageQuerySettings()
+	}
+	return &GetConversationPageQueryVariables{
+		ConversationID:            conversationID,
+		MinLocalSequenceID:        minLocalSequenceID,
+		MinConversationKeyVersion: minConversationKeyVersion,
+		QuerySettings:             settings,
+	}
+}
+
+// EncodeJSONQuery serializes the inbox page request variables to JSON and wraps
+// them in a query string suitable for ?variables=... on GraphQL GET requests.
+func (p *GetInboxPageRequestQueryVariables) EncodeJSONQuery() (string, error) {
+	if p.ContinueCursor == nil {
+		return "", fmt.Errorf("continue_cursor is required")
+	}
+
+	type gqlCursor struct {
+		MaxLocalSequenceID string `json:"max_local_sequence_id,omitempty"`
+
+		CursorID        string `json:"cursor_id,omitempty"`
+		GraphSnapshotID string `json:"graph_snapshot_id,omitempty"`
+	}
+	type gqlSettings struct {
+		InboxConversationEventLimit int `json:"inbox_conversation_event_limit"`
+		InboxConversationLimit      int `json:"inbox_conversation_limit"`
+		ConversationEventLimit      int `json:"conversation_event_limit"`
+		UserEventLimit              int `json:"user_event_limit"`
+	}
+	type gqlVars struct {
+		ContinueCursor *gqlCursor   `json:"continue_cursor"`
+		QuerySettings  *gqlSettings `json:"query_settings"`
+	}
+
+	vars := gqlVars{
+		ContinueCursor: &gqlCursor{
+			MaxLocalSequenceID: p.ContinueCursor.MaxLocalSequenceID,
+
+			CursorID:        p.ContinueCursor.CursorId,
+			GraphSnapshotID: p.ContinueCursor.GraphSnapshotId,
+		},
+		QuerySettings: &gqlSettings{
+			InboxConversationEventLimit: p.QuerySettings.InboxConversationEventLimit,
+			InboxConversationLimit:      p.QuerySettings.InboxConversationLimit,
+			ConversationEventLimit:      p.QuerySettings.ConversationEventLimit,
+			UserEventLimit:              p.QuerySettings.UserEventLimit,
+		},
+	}
+
+	jsonVars, err := json.Marshal(vars)
+	if err != nil {
+		return "", err
+	}
+
+	values := url.Values{}
+	values.Set("variables", string(jsonVars))
+	return values.Encode(), nil
+}

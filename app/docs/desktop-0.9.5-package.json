@@ -1,0 +1,23 @@
+{
+  "file": "BeeperLocal-0.9.5-AppleSilicon-beta.zip",
+  "size_bytes": 60473137,
+  "sha256": "f68e35e4b1c2003c4e4bf998976a17d02c7c47913438911e5db888a36b337e7b",
+  "source_files": 829,
+  "source_archive_bytes": 3487582,
+  "audience": "friends",
+  "distribution_checks": {
+    "apple": {
+      "notarization": "accepted",
+      "ticket": "valid",
+      "gatekeeper": "accepted",
+      "team_id": "8FJAQT4D6B",
+      "cdhash": "94cb11dae95dd9b3c260dc995af12f649d3b134a"
+    },
+    "slack": {
+      "slackOAuthConfigured": true,
+      "slackClientId": "11683442969584.12190221092304",
+      "slackRedirectUri": "beeperlocal://oauth/slack",
+      "slackDistributionReady": true
+    }
+  }
+}

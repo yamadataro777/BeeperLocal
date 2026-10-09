@@ -18,6 +18,7 @@ import (
 const MaxTextUnits = 10000
 
 var midPattern = regexp.MustCompile(`^[uUcCrR][A-Za-z0-9_-]{2,}$`)
+var stickerIDPattern = regexp.MustCompile(`^[0-9]{1,20}$`)
 
 func ValidateChatID(id string) error {
 	if !midPattern.MatchString(id) {
@@ -108,6 +109,7 @@ func newClient(manager *session.Manager, factory func() (Crypto, error)) (*Clien
 }
 
 type Message struct {
+	StickerID   string                 `json:"sticker_id,omitempty"`
 	FileName    string                 `json:"file_name,omitempty"`
 	ID          string                 `json:"id"`
 	From        string                 `json:"from"`
@@ -157,6 +159,11 @@ func (c *Client) Decode(chat string, msg *line.Message) Message {
 		item.Status = "attachment"
 		if msg.ContentType == 14 {
 			item.FileName = msg.ContentMetadata["FILE_NAME"]
+		}
+	} else if msg.ContentType == 7 {
+		item.Status = "attachment"
+		if id := msg.ContentMetadata["STKID"]; stickerIDPattern.MatchString(id) {
+			item.StickerID = id
 		}
 	} else if msg.ContentType != 0 {
 		item.Status = "unsupported"
@@ -285,10 +292,10 @@ func (c *Client) send(chat, text, replyTo string, file *Attachment) (*SendResult
 	metadata := make(map[string]string)
 	contentType := 0
 	if file != nil {
-		contentType = 14
+		contentType = file.contentType()
 		metadata["FILE_NAME"] = file.Name
 		metadata["FILE_SIZE"] = strconv.Itoa(len(file.Data))
-		metadata["contentType"] = "14"
+		metadata["contentType"] = strconv.Itoa(contentType)
 	}
 	var chunks []string
 	var err error
@@ -310,7 +317,7 @@ func (c *Client) send(chat, text, replyTo string, file *Attachment) (*SendResult
 				var payload []byte
 				payload, err = c.uploadFile(file, metadata)
 				if err == nil {
-					chunks, err = c.crypto.EncryptMessageV2Raw(chat, c.state.MID, runtimeKey, key.PublicKey, own, int(peer), 14, payload)
+					chunks, err = c.crypto.EncryptMessageV2Raw(chat, c.state.MID, runtimeKey, key.PublicKey, own, int(peer), contentType, payload)
 				}
 			}
 		}
@@ -332,7 +339,7 @@ func (c *Client) send(chat, text, replyTo string, file *Attachment) (*SendResult
 				var payload []byte
 				payload, err = c.uploadFile(file, metadata)
 				if err == nil {
-					chunks, err = c.crypto.EncryptGroupMessageRaw(chat, c.state.MID, 14, payload)
+					chunks, err = c.crypto.EncryptGroupMessageRaw(chat, c.state.MID, contentType, payload)
 				}
 			}
 		}
@@ -373,7 +380,11 @@ func (c *Client) send(chat, text, replyTo string, file *Attachment) (*SendResult
 		return nil, errors.New("send returned no message ID; delivery may have occurred; inspect history before retrying")
 	}
 	if plain && file != nil {
-		if err := c.Session.Mutate(func(api session.API) error { return api.UploadOBSPlain(file.Data, sent.ID, "file") }); err != nil {
+		kind := "file"
+		if file.Image {
+			kind = "image"
+		}
+		if err := c.Session.Mutate(func(api session.API) error { return api.UploadOBSPlain(file.Data, sent.ID, kind) }); err != nil {
 			return nil, fmt.Errorf("message %s was created but file upload did not return success; inspect LINE before retrying: %w", sent.ID, err)
 		}
 	}

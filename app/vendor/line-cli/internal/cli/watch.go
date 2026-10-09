@@ -18,6 +18,7 @@ func (a *App) watchCommand(args []string) error {
 		fs.PrintDefaults()
 	}
 	jsonOutput := fs.Bool("json", true, "write newline-delimited JSON (the watch output format)")
+	statusEvents := fs.Bool("status-events", false, "include receiver readiness, reconnect and logout events")
 	fromNow := fs.Bool("from-now", false, "discard the saved resume position and start at the current revision")
 	limit := fs.Int("limit", 0, "stop after N emitted events; 0 watches continuously")
 	timeout := fs.Duration("timeout", 0, "stop after this duration, e.g. 30s; 0 watches continuously")
@@ -49,7 +50,7 @@ func (a *App) watchCommand(args []string) error {
 	}
 	defer unlock()
 	fmt.Fprintln(a.Err, "Watching LINE events. Press Ctrl-C to stop.")
-	w := &events.Watcher{Manager: a.Manager, Lock: a.Lock, Out: a.Out, Err: a.Err, FromNow: *fromNow, Limit: *limit}
+	w := &events.Watcher{Manager: a.Manager, Lock: a.Lock, Out: a.Out, Err: a.Err, FromNow: *fromNow, Limit: *limit, StatusEvents: *statusEvents}
 	err = w.Run(ctx)
 	if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
 		return nil

@@ -1,0 +1,14 @@
+{
+  "installed_legacy_crypto_matches_live_verified_build": true,
+  "installed_x_layers_match_tested": {
+    "beeperlocal.x_worker": true,
+    "beeperlocal.connectors.x": true,
+    "beeperlocal.desktop_x": true
+  },
+  "installed_parser_code_matches_tested": true,
+  "installed_line_media_preserved": true,
+  "installed_slack_profiles_preserved": true,
+  "additional_duplicate_counter_fix_in_installed_app": false,
+  "additional_duplicate_counter_fix_in_main_source": true,
+  "installed_core_sha256": "f9bff977085c583ec73b6a3166ba9cdd21bfece0a01458b89d0bc5d30f30a022"
+}

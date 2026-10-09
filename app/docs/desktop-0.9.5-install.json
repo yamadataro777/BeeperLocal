@@ -1,0 +1,29 @@
+{
+  "version": "0.9.5",
+  "installed_at_utc": "2026-10-03T08:01:57.409925+00:00",
+  "app": "/Users/haruotsuchiya/Desktop/BeeperLocal/BeeperLocal.app",
+  "backup": "/Users/haruotsuchiya/Desktop/BeeperLocal/archive/app-backups/BeeperLocal-0.9.4-before-0.9.5-slack-20261003T170156.app",
+  "previous_version": "0.9.4",
+  "backup_files_unchanged": true,
+  "installed_files_equal_source": true,
+  "installed_file_count": 26,
+  "signature": {
+    "mode": "release",
+    "executables_verified": 10,
+    "embedded_binaries_verified": 85,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "distribution": {
+    "notarization": "accepted",
+    "ticket": "valid",
+    "gatekeeper": "accepted",
+    "team_id": "8FJAQT4D6B",
+    "cdhash": "94cb11dae95dd9b3c260dc995af12f649d3b134a"
+  },
+  "user_data_modified": false,
+  "keychain_acl_modified": false,
+  "production_credentials_read": false,
+  "live_popup_recurrence_after_update": "not_verified",
+  "app_launched": false
+}

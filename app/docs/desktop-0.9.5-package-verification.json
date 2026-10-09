@@ -1,0 +1,69 @@
+{
+  "version": "0.9.5",
+  "date": "2026-10-03",
+  "file": "BeeperLocal-0.9.5-AppleSilicon-beta.zip",
+  "size_bytes": 60473137,
+  "sha256": "f68e35e4b1c2003c4e4bf998976a17d02c7c47913438911e5db888a36b337e7b",
+  "checks": {
+    "zip_extraction_signature": {
+      "mode": "release",
+      "executables_verified": 10,
+      "embedded_binaries_verified": 85,
+      "update_compatibility": "not_checked",
+      "notarization": "not_checked"
+    },
+    "apple_distribution": {
+      "notarization": "accepted",
+      "ticket": "valid",
+      "gatekeeper": "accepted",
+      "team_id": "8FJAQT4D6B",
+      "cdhash": "94cb11dae95dd9b3c260dc995af12f649d3b134a"
+    },
+    "slack_distribution": {
+      "slackOAuthConfigured": true,
+      "slackClientId": "11683442969584.12190221092304",
+      "slackRedirectUri": "beeperlocal://oauth/slack",
+      "slackDistributionReady": true
+    },
+    "compatibility": {
+      "passed": true,
+      "minimumOS": "13.0",
+      "executables": 10,
+      "embeddedBinaries": 85
+    },
+    "all_app_files_match_signed_build": 26,
+    "executables_match_signed_build": 10,
+    "embedded_source_assets": 23,
+    "source_matches_current_files": true,
+    "extracted_setup_helpers": 2,
+    "extracted_runtime": {
+      "runtimeReady": true,
+      "mcp": true,
+      "xCrypto": true,
+      "systemTLS": true,
+      "version": "0.9.5"
+    },
+    "extracted_public_tls": {
+      "tlsVerified": true
+    },
+    "portable_path_contains_spaces_and_japanese": true,
+    "isolated_empty_home": true,
+    "os_path_only": true,
+    "developer_ca_unavailable": true,
+    "database_created": false,
+    "keychain_isolation": "not_claimed_no_item_access",
+    "production_ui_fixture_scenarios_absent": true
+  },
+  "source_files": 829,
+  "source_archive_bytes": 3487582,
+  "usual_app_version": "0.9.5",
+  "usual_app_replaced": true,
+  "real_messages_sent": 0,
+  "production_mcp_grants_created": 0,
+  "production_credentials_read": false,
+  "production_data_deleted": false,
+  "notarization": "accepted",
+  "slack_public_configuration": "verified",
+  "other_mac_or_os_user": "not_verified",
+  "public_beta_ready": false
+}

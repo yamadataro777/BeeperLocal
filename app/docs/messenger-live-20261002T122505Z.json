@@ -1,0 +1,12 @@
+{
+  "provider": "messenger",
+  "source": "signed_packaged_core",
+  "observed_at_utc": "2026-10-02T12:24:51.006502+00:00",
+  "outbound_user_messages": 0,
+  "new_inbound_text": "not_proven_separately_from_import",
+  "native_gui": "not_tested",
+  "old_encrypted_backup": "unsupported",
+  "usual_app_replaced": false,
+  "result": "failed_closed",
+  "error_code": "DESKTOP_ALREADY_RUNNING"
+}

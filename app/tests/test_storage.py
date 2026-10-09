@@ -70,6 +70,43 @@ class EncryptedStorageTests(unittest.TestCase):
             EncryptedMessageStore(b"x" * 32, self.path)
         self.assertEqual(ctx.exception.code, "LOCAL_DB_KEY_MISMATCH")
 
+    def test_unsupported_schema_is_rejected_without_repair_or_content_changes(self):
+        mutations = [
+            "DROP TABLE sync_receipts",
+            "DROP INDEX messages_scope_time; ALTER TABLE messages DROP COLUMN scope_id",
+            "PRAGMA user_version=99",
+            "UPDATE meta SET value='99' WHERE key='schema_version'",
+            "DELETE FROM meta WHERE key='key_fingerprint'",
+        ]
+        for index, mutation in enumerate(mutations):
+            with self.subTest(mutation=mutation):
+                path = self.path.with_name(f"old-{index}.db")
+                with EncryptedMessageStore(self.key, path) as db:
+                    db.upsert([unified(1, provider="matrix")])
+                with sqlite3.connect(path) as conn:
+                    conn.executescript(mutation)
+                conn.close()
+                before = path.read_bytes()
+                with self.assertRaises(AppError) as caught:
+                    with EncryptedMessageStore(self.key, path):
+                        pass
+                self.assertEqual(caught.exception.code, "LOCAL_DB_SCHEMA_UNSUPPORTED")
+                self.assertEqual(path.read_bytes(), before)
+
+    def test_rejected_wal_schema_keeps_journal_mode_and_database_bytes(self):
+        with EncryptedMessageStore(self.key, self.path):
+            pass
+        with sqlite3.connect(self.path) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA user_version=99")
+        conn.close()
+        before = self.path.read_bytes()
+        with self.assertRaises(AppError) as caught:
+            with EncryptedMessageStore(self.key, self.path):
+                pass
+        self.assertEqual(caught.exception.code, "LOCAL_DB_SCHEMA_UNSUPPORTED")
+        self.assertEqual(self.path.read_bytes(), before)
+
     def test_ciphertext_tamper_is_detected(self):
         with EncryptedMessageStore(self.key, self.path) as db:
             msg = unified(1, provider="matrix")

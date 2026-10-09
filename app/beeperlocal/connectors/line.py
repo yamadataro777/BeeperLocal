@@ -22,6 +22,7 @@ from ..models import Conversation, FetchBatch, SendResult, UnifiedMessage, finis
 # Preserve case: modern IDs are opaque base64url, legacy IDs are lowercase hex.
 DIRECT_MID = re.compile(r"(?:[uU][A-Za-z0-9_-]{43}|u[0-9a-f]{32})\Z")
 MAX_EVENT_BYTES = 1024 * 1024
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
 
 
 def direct_mid(value) -> str:
@@ -39,10 +40,18 @@ def identity(profile) -> str:
 def normalize_line(raw, account_id: str, conversation: Conversation) -> UnifiedMessage | None:
     if not isinstance(raw, dict) or type(raw.get("content_type")) is not int:
         raise AppError("BAD_RESPONSE")
-    if raw["content_type"] != 0:
+    kind = raw["content_type"]
+    if kind not in {0, 1, 7}:
         return None
-    if raw.get("status") not in {"plaintext", "decrypted"}:
+    if kind == 0 and raw.get("status") not in {"plaintext", "decrypted"}:
         raise AppError("LINE_DECRYPT_FAILED")
+    media = None
+    if kind in {1, 7}:
+        media = {"kind": "image" if kind == 1 else "sticker"}
+        # Older bundled CLIs mark stickers unsupported and omit their metadata.
+        sticker_id = raw.get("sticker_id")
+        if kind == 7 and isinstance(sticker_id, str) and re.fullmatch(r"[0-9]{1,20}", sticker_id):
+            media["sticker_id"] = sticker_id
     sender, recipient = raw.get("from"), raw.get("to")
     if (sender, recipient) == (account_id, conversation.id):
         direction = "outgoing"
@@ -51,6 +60,8 @@ def normalize_line(raw, account_id: str, conversation: Conversation) -> UnifiedM
     else:
         raise AppError("BAD_RESPONSE")
     message_id, text = raw.get("id"), raw.get("text")
+    if media:
+        text = "画像" if kind == 1 else "スタンプ"
     if not isinstance(message_id, str) or not message_id or not isinstance(text, str):
         raise AppError("BAD_RESPONSE")
     try:
@@ -63,7 +74,8 @@ def normalize_line(raw, account_id: str, conversation: Conversation) -> UnifiedM
     except (KeyError, ValueError, OverflowError, OSError):
         raise AppError("BAD_RESPONSE") from None
     return UnifiedMessage("line", account_id, conversation.id, message_id, sender,
-                          sent_at, text, conversation.title, direction=direction)
+                          sent_at, text, conversation.title, direction=direction,
+                          attachment_count=1 if media else 0, media=media)
 
 
 async def stop_process(process) -> None:
@@ -101,13 +113,15 @@ class LineCLI:
         except OSError:
             raise AppError("LINE_CLI_MISSING") from None
 
-    async def request(self, *args, text=None, mutation=False, allow_failure=False):
+    async def request(self, *args, text=None, data=None, mutation=False, allow_failure=False):
         # Exactly one spawn/attempt, including ambiguous send failures.
-        process = await self._start(*args, input_pipe=text is not None)
+        if text is not None and data is not None:
+            raise AppError('INVALID_INPUT')
+        process = await self._start(*args, input_pipe=text is not None or data is not None)
         try:
             try:
                 stdout, _ = await asyncio.wait_for(
-                    process.communicate(text.encode("utf-8") if text is not None else None), 60)
+                    process.communicate(text.encode("utf-8") if text is not None else data), 90 if data is not None else 60)
                 if process.returncode != 0 and not allow_failure:
                     raise ValueError()
                 return json.loads(stdout)
@@ -132,31 +146,57 @@ class LineCLI:
         finally:
             await stop_process(process)
 
+    async def download_image(self, conversation_id, message_id):
+        direct_mid(conversation_id)
+        if not isinstance(message_id, str) or not re.fullmatch(r"[0-9]{1,32}", message_id):
+            raise AppError("INVALID_INPUT")
+        process = await self._start("download", conversation_id, "--message", message_id, "--output", "-")
+        try:
+            async with asyncio.timeout(130):
+                data = bytearray()
+                while chunk := await process.stdout.read(64 * 1024):
+                    data.extend(chunk)
+                    if len(data) > MAX_IMAGE_BYTES:
+                        raise AppError("LINE_MEDIA_UNAVAILABLE")
+                if await process.wait() != 0 or not data:
+                    raise AppError("LINE_MEDIA_UNAVAILABLE")
+                return bytes(data)
+        except (TimeoutError, OSError):
+            raise AppError("LINE_MEDIA_UNAVAILABLE") from None
+        finally:
+            await stop_process(process)
+
     async def whoami(self):
         status = await self.request("auth", "status", "--json", allow_failure=True)
-        if isinstance(status, dict) and (status.get("reason") == "no_session" or status.get("line_validity") == "invalidated"):
-            raise AppError("LINE_LOGIN_REQUIRED")
+        self.check_session_status(status)
         # watch briefly owns the CLI session lock during startup/key operations.
         # Retry only this read-only identity check; request(send) is never replayed.
         for attempt in range(4):
             try:
                 return identity(await self.request("whoami", "--json"))
             except AppError as exc:
-                if exc.code != "LINE_REQUEST_FAILED" or attempt == 3:
+                if exc.code != "LINE_REQUEST_FAILED":
                     raise
                 status = await self.request("auth", "status", "--json", allow_failure=True)
-                if isinstance(status, dict) and status.get("line_validity") == "invalidated":
-                    raise AppError("LINE_LOGIN_REQUIRED") from None
+                self.check_session_status(status)
+                if attempt == 3:
+                    raise
                 await asyncio.sleep(0.25 * (2 ** attempt))
 
-    async def events(self, *, timeout: int, from_now: bool, started=None):
-        args = ["watch", "--json", "--timeout", f"{timeout}s"]
+    @staticmethod
+    def check_session_status(status):
+        if isinstance(status, dict):
+            if status.get('line_validity') == 'invalidated':
+                raise AppError('LINE_SESSION_REVOKED')
+            if status.get('reason') == 'no_session':
+                raise AppError('LINE_LOGIN_REQUIRED')
+
+    async def events(self, *, timeout: int, from_now: bool, started=None, status_changed=None):
+        args = ["watch", "--json", "--status-events", "--timeout", f"{timeout}s"]
         if from_now:
             args.append("--from-now")
         process = await self._start(*args)
         try:
-            if started is not None:
-                started.set()  # Local process started; not a server-ready acknowledgment.
             while True:
                 try:
                     raw = await process.stdout.readline()
@@ -167,8 +207,22 @@ class LineCLI:
                         raise ValueError()
                 except (ValueError, UnicodeError):
                     raise AppError("BAD_RESPONSE") from None
+                if event.get('event') == 'status':
+                    state = event.get('state')
+                    if state == 'logged_out':
+                        code = event.get('code')
+                        raise AppError(code if code in {'LINE_SESSION_REVOKED', 'LINE_LOGIN_REQUIRED'} else 'BAD_RESPONSE')
+                    if state not in {'ready', 'reconnecting'}:
+                        raise AppError('BAD_RESPONSE')
+                    if started is not None:
+                        started.set() if state == 'ready' else started.clear()
+                    if status_changed is not None:
+                        status_changed(state)
+                    continue
                 yield event
             if await process.wait() != 0:
+                # Covers early failures before the watcher could emit a status.
+                self.check_session_status(await self.request('auth', 'status', '--json', allow_failure=True))
                 raise AppError("LINE_WATCH_FAILED")
         finally:
             await stop_process(process)
@@ -199,6 +253,10 @@ class LineConnector:
         self.account_id = direct_mid(self.credentials["account_id"]) if self.credentials.get("account_id") else ""
         self.cli = cli or LineCLI()
         self.catalog = {}
+
+    @property
+    def supports_watch_status(self):
+        return isinstance(self.cli, LineCLI)
 
     async def connect(self):
         account_id = await self.cli.whoami()
@@ -290,6 +348,19 @@ class LineConnector:
             batch.errors.append(exc.code)
         return finish_batch(batch)
 
+    async def fetch_page(self, conversation, *, cursor=None):
+        from ..desktop_sync import HistoryPage
+        if cursor is not None:
+            raise AppError('CONNECTOR_CAPABILITY_UNSUPPORTED')
+        direct_mid(conversation.id)
+        await self.connect()
+        rows = await self.cli.request('messages', conversation.id, '--limit', '100', '--json')
+        if not isinstance(rows, list):
+            raise AppError('BAD_RESPONSE')
+        messages = [m for raw in rows if (m := normalize_line(raw, self.account_id, conversation)) is not None]
+        return HistoryPage(StoredConversation('line', self.account_id, conversation), messages,
+                           complete=False, coverage='provider_recent_window')
+
     async def send_text(self, text: str) -> SendResult:
         await self.connect()
         return await self._send_to_conversation(self.selected_conversation(), text)
@@ -321,18 +392,37 @@ class LineConnector:
                                  sent_at, text, conversation.title, direction="outgoing")
         return SendResult(message, data["encrypted"])
 
-    async def watch(self, *, timeout: int = 300, from_now: bool = False, started=None):
+    async def send_image_to(self, conversation, image, *, authorize):
+        mid = direct_mid(conversation.id)
+        if mid == self.account_id or conversation.kind != 'dm' or conversation.locator.get('mid') != mid:
+            raise AppError('INVALID_INPUT')
+        await self.connect()
+        authorize()
+        data = await self.cli.request('send', conversation.id, '--image-stdin', '--json', data=image.data, mutation=True)
+        if (not isinstance(data, dict) or data.get('chat_id') != conversation.id
+                or not isinstance(data.get('id'), str) or not data['id'] or type(data.get('encrypted')) is not bool):
+            raise AppError('LINE_SEND_UNKNOWN')
+        message = UnifiedMessage('line', self.account_id, conversation.id, data['id'], self.account_id,
+            datetime.now(timezone.utc), '', conversation.title, direction='outgoing', attachment_count=1, media={'kind': 'image'})
+        return SendResult(message, data['encrypted'])
+
+    async def watch(self, *, timeout: int = 300, from_now: bool = False, started=None, all_conversations=False, status_changed=None):
         from contextlib import aclosing
         await self.connect()
-        conversation = self.selected_conversation()
+        selected = None if all_conversations else self.selected_conversation()
         options = {"timeout": timeout, "from_now": from_now}
         if started is not None:
             options["started"] = started
+        if status_changed is not None:
+            options['status_changed'] = status_changed
         async with aclosing(self.cli.events(**options)) as events:
             async for event in events:
                 if event.get("event") == "resync_required":
                     raise AppError("LINE_RESYNC_REQUIRED")
-                if event.get("event") != "message" or event.get("chat_id") != conversation.id:
+                if event.get("event") != "message":
+                    continue
+                conversation = self.catalog.get(event.get("chat_id")) if all_conversations else selected
+                if conversation is None or event.get("chat_id") != conversation.id:
                     continue
                 if event.get("type") not in {25, 26}:
                     continue

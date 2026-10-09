@@ -1,0 +1,91 @@
+package endpoints
+
+// TODO fix variable name casing
+
+const (
+	TWITTER_BASE_HOST = "twitter.com"
+	TWITTER_BASE_URL  = "https://" + TWITTER_BASE_HOST
+
+	BASE_HOST                      = "x.com"
+	BASE_URL                       = "https://" + BASE_HOST
+	BASE_LOGIN_URL                 = BASE_URL + "/login"
+	BASE_FLOW_LOGIN_URL            = BASE_URL + "/i/flow/login"
+	BASE_MESSAGES_URL              = BASE_URL + "/messages"
+	BASE_LOGOUT_URL                = BASE_URL + "/logout"
+	BASE_NOTIFICATION_SETTINGS_URL = BASE_URL + "/settings/push_notifications"
+	JETFUEL_BASE_URL               = "https://jf.x.com"
+	JETFUEL_LOGIN_DOCUMENT_URL     = BASE_URL + "/i/jfapi" + JETFUEL_LOGIN_PATH
+
+	API_BASE_HOST = "api.x.com"
+	API_BASE_URL  = "https://" + API_BASE_HOST
+
+	INBOX_INITIAL_STATE_URL            = BASE_URL + "/i/api/1.1/dm/inbox_initial_state.json"
+	DM_USER_UPDATES_URL                = BASE_URL + "/i/api/1.1/dm/user_updates.json"
+	TRUSTED_INBOX_TIMELINE_URL         = BASE_URL + "/i/api/1.1/dm/inbox_timeline/trusted.json"
+	ACCEPT_CONVERSATION_URL            = BASE_URL + "/i/api/1.1/dm/conversation/%s/accept.json"
+	CONVERSATION_MARK_READ_URL         = BASE_URL + "/i/api/1.1/dm/conversation/%s/mark_read.json"
+	GRAPHQL_MESSAGE_DELETION_MUTATION  = BASE_URL + "/i/api/graphql/BJ6DtxA2llfjnRoRjaiIiw/DMMessageDeleteMutation"
+	SEARCH_TYPEAHEAD_URL               = BASE_URL + "/i/api/1.1/search/typeahead.json"
+	DM_PERMISSIONS_URL                 = BASE_URL + "/i/api/1.1/dm/permissions.json"
+	SEND_DM_URL                        = BASE_URL + "/i/api/1.1/dm/new2.json"
+	CONVERSATION_FETCH_MESSAGES_URL    = BASE_URL + "/i/api/1.1/dm/conversation/%s.json"
+	DELETE_CONVERSATION_URL            = BASE_URL + "/i/api/1.1/dm/conversation/%s/delete.json"
+	UPDATE_CONVERSATION_AVATAR_URL     = BASE_URL + "/i/api/1.1/dm/conversation/%s/update_avatar.json"
+	UPDATE_CONVERSATION_NAME_URL       = BASE_URL + "/i/api/1.1/dm/conversation/%s/update_name.json"
+	PIN_CONVERSATION_URL               = BASE_URL + "/i/api/graphql/o0aymgGiJY-53Y52YSUGVA/DMPinnedInboxAppend_Mutation"
+	UNPIN_CONVERSATION_URL             = BASE_URL + "/i/api/graphql/_TQxP2Rb0expwVP9ktGrTQ/DMPinnedInboxDelete_Mutation"
+	GET_PINNED_CONVERSATIONS_URL       = BASE_URL + "/i/api/graphql/_gBQBgClVuMQb8efxWkbbQ/DMPinnedInboxQuery"
+	ADD_PARTICIPANTS_URL               = BASE_URL + "/i/api/graphql/oBwyQ0_xVbAQ8FAyG0pCRA/AddParticipantsMutation"
+	ADD_REACTION_URL                   = BASE_URL + "/i/api/graphql/VyDyV9pC2oZEj6g52hgnhA/useDMReactionMutationAddMutation"
+	REMOVE_REACTION_URL                = BASE_URL + "/i/api/graphql/bV_Nim3RYHsaJwMkTXJ6ew/useDMReactionMutationRemoveMutation"
+	SEND_TYPING_NOTIFICATION           = BASE_URL + "/i/api/graphql/HL96-xZ3Y81IEzAdczDokg/useTypingNotifierMutation"
+	GENERATE_XCHAT_TOKEN_MUTATION_URL  = API_BASE_URL + "/graphql/Qh3fZRjPPtPoHYR_2sCZsA/GenerateXChatTokenMutation"
+	SEND_MESSAGE_MUTATION_URL          = API_BASE_URL + "/graphql/LkAIEchf8AGj-WgeLoTVcw/SendMessageMutation"
+	DELETE_MESSAGE_MUTATION_URL        = API_BASE_URL + "/graphql/4gsDQKEmYkOtvsSIpHXdQA/DeleteMessageMutation"
+	MUTE_CONVERSATION_URL              = API_BASE_URL + "/graphql/Dy7geJg7CL5dqhsl6QBteg/MuteConversation"
+	UNMUTE_CONVERSATION_URL            = API_BASE_URL + "/graphql/LnNSeGu4vnbwqXAvh7OlGQ/UnmuteConversation"
+	DELETE_CONVERSATION_MUTATION_URL   = API_BASE_URL + "/graphql/9nsAnKrQvpifR3UmdtIdOg/ConversationDeletion"
+	GET_INITIAL_XCHAT_PAGE_QUERY_URL   = API_BASE_URL + "/graphql/Gl7r1aY59L7jLBjVC98lqg/GetInitialXChatPageQuery"
+	GET_INBOX_PAGE_REQUEST_QUERY_URL   = API_BASE_URL + "/graphql/wmieJEOHm6twV06EXwRdiA/GetInboxPageRequestQuery"
+	GET_MESSAGE_EVENTS_PAGE_QUERY_URL  = API_BASE_URL + "/graphql/OaSNyAhxUZ9AaW2z9cC26A/GetMessageEventsPageQuery"
+	GET_INBOX_PAGE_CONV_DATA_QUERY_URL = API_BASE_URL + "/graphql/uQEDp5FgdqNiG2jT5q07Jw/GetInboxPageConversationDataRequestQuery"
+	GET_USERS_BY_IDS_FOR_XCHAT_URL     = API_BASE_URL + "/graphql/MnzVKPEXUx3X1VRCyjKlMA/GetUsersByIdsForXChat"
+	GET_CONVERSATION_PAGE_QUERY_URL    = API_BASE_URL + "/graphql/IVlXls9JTnbgQ1gxsGAfJA/GetConversationPageQuery"
+	GET_PUBLIC_KEYS_QUERY_URL          = API_BASE_URL + "/graphql/RQAjOoIX9dIsHoVjuVV0Iw/GetPublicKeys"
+	ADD_XCHAT_PUBLIC_KEY_MUTATION_HASH = "CQsk6GRuWAVabyXqqEG1sA"
+	ADD_XCHAT_PUBLIC_KEY_MUTATION_URL  = API_BASE_URL + "/graphql/" + ADD_XCHAT_PUBLIC_KEY_MUTATION_HASH + "/AddXChatPublicKeyMutation"
+
+	XCHAT_WEBSOCKET_URL = "wss://chat-ws.x.com/ws"
+
+	INITIALIZE_XCHAT_MEDIA_UPLOAD_URL = API_BASE_URL + "/graphql/g2n9PB_uaRYv_SFvQokEFw/InitializeXChatMediaUpload"
+	FINALIZE_XCHAT_MEDIA_UPLOAD_URL   = API_BASE_URL + "/graphql/UK24H5vBa5MJspBmjZyFVQ/FinalizeXChatMediaUpload"
+	TON_UPLOAD_BASE_URL               = "https://ton.x.com"
+
+	JOT_CLIENT_EVENT_URL = API_BASE_URL + "/1.1/jot/client_event.json"
+	JOT_CES_P2_URL       = API_BASE_URL + "/1.1/jot/ces/p2"
+	VIEWER_CONTEXT_URL   = API_BASE_URL + "/1.1/graphql/viewer_context.json"
+	TWEET_OEMBED_URL     = "https://publish.twitter.com/oembed"
+
+	GUEST_ACTIVATE_URL                  = API_BASE_URL + "/1.1/guest/activate.json"
+	ONBOARDING_TASK_URL                 = API_BASE_URL + "/1.1/onboarding/task.json"
+	ONBOARDING_LOGIN_TASK_URL           = ONBOARDING_TASK_URL + "?flow_name=login"
+	JETFUEL_LANDING_PATH                = "/onboarding/web/landing"
+	JETFUEL_LOGIN_PATH                  = "/onboarding/web?mode=login"
+	JETFUEL_BEGIN_LOGIN_PATH            = "/onboarding/web/actions/begin_login"
+	JETFUEL_LOGIN_ENTER_PASSWORD_PATH   = "/onboarding/web/actions/login_enter_password"
+	JETFUEL_BEGIN_TWO_FACTOR_AUTH_PATH  = "/onboarding/web/actions/begin_two_factor_auth"
+	JETFUEL_FINISH_TWO_FACTOR_AUTH_PATH = "/onboarding/web/actions/finish_two_factor_auth"
+
+	PIPELINE_EVENTS_URL = API_BASE_URL + "/live_pipeline/events"
+	PIPELINE_UPDATE_URL = API_BASE_URL + "/1.1/live_pipeline/update_subscriptions"
+
+	UPLOAD_BASE_HOST = "upload.x.com"
+	UPLOAD_BASE_URL  = "https://" + UPLOAD_BASE_HOST
+	UPLOAD_MEDIA_URL = UPLOAD_BASE_URL + "/i/media/upload.json"
+
+	NOTIFICATION_SETTINGS_URL = BASE_URL + "/i/api/1.1/notifications/settings"
+	NOTIFICATION_LOGIN_URL    = NOTIFICATION_SETTINGS_URL + "/login.json"
+	NOTIFICATION_LOGOUT_URL   = NOTIFICATION_SETTINGS_URL + "/logout.json"
+	NOTIFICATION_CHECKIN_URL  = NOTIFICATION_SETTINGS_URL + "/checkin.json"
+	NOTIFICATION_SAVE_URL     = NOTIFICATION_SETTINGS_URL + "/save.json"
+)

@@ -1,6 +1,7 @@
 package messaging
 
 import (
+	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -10,6 +11,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"strconv"
 	"strings"
@@ -43,11 +47,25 @@ func attachmentSID(contentType int) string {
 }
 
 type Attachment struct {
-	Name string
-	Data []byte
+	Name  string
+	Data  []byte
+	Image bool
+}
+
+func (f Attachment) contentType() int {
+	if f.Image {
+		return 1
+	}
+	return 14
 }
 
 func (f Attachment) Validate() error {
+	if f.Image {
+		config, format, err := image.DecodeConfig(bytes.NewReader(f.Data))
+		if err != nil || (format != "png" && format != "jpeg") || len(f.Data) > 4<<20 || config.Width <= 0 || config.Height <= 0 || config.Width > 16384 || config.Height > 16384 || int64(config.Width)*int64(config.Height) > 25000000 {
+			return errors.New("invalid or oversized image")
+		}
+	}
 	if f.Name == "" || len(f.Name) > 255 || !utf8.ValidString(f.Name) || strings.ContainsAny(f.Name, "/\\") || strings.ContainsFunc(f.Name, unicode.IsControl) {
 		return errors.New("attachment needs a valid file name without path separators or control characters")
 	}
@@ -131,13 +149,14 @@ func (c *Client) uploadFile(file *Attachment, metadata map[string]string) ([]byt
 		return nil, err
 	}
 	var oid string
-	if err := c.Session.Mutate(func(api session.API) (err error) { oid, err = api.UploadOBSWithSID(data, "emf"); return }); err != nil {
+	sid := attachmentSID(file.contentType())
+	if err := c.Session.Mutate(func(api session.API) (err error) { oid, err = api.UploadOBSWithSID(data, sid); return }); err != nil {
 		return nil, err
 	}
 	if oid == "" {
 		return nil, errors.New("file upload returned no object ID")
 	}
-	metadata["OID"], metadata["SID"], metadata["ENC_KM"] = oid, "emf", key
+	metadata["OID"], metadata["SID"], metadata["ENC_KM"] = oid, sid, key
 	return json.Marshal(map[string]string{"keyMaterial": key, "fileName": file.Name})
 }
 

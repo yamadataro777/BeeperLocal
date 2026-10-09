@@ -1,0 +1,65 @@
+{
+  "version": "0.8.7",
+  "date": "2026-10-02",
+  "tests": {
+    "python": 440,
+    "playwright_fixture": 49,
+    "rust_ipc": 3,
+    "shell_syntax": true,
+    "offline_demo": true,
+    "production_build": true
+  },
+  "signature": {
+    "mode": "release",
+    "executables_verified": 8,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "architectures": {
+    "beeperlocal-ig": "arm64",
+    "beeperlocal-messenger": "arm64",
+    "beeperlocal-x": "arm64",
+    "line": "arm64",
+    "beeperlocal-core": "arm64",
+    "beeperlocal-desktop": "arm64",
+    "beeperlocal-x-login": "arm64",
+    "beeperlocal-messenger-login": "arm64"
+  },
+  "isolated_runtime": {
+    "runtime": {
+      "runtimeReady": true,
+      "mcp": true,
+      "xCrypto": true,
+      "version": "0.8.7"
+    },
+    "instagram": {
+      "instagramLoginReady": true
+    },
+    "slack": {
+      "slackLoginReady": true
+    }
+  },
+  "bundled_setup_scripts": true,
+  "noninteractive_login_rejected": true,
+  "real_messages_sent": 0,
+  "production_data_deleted": false,
+  "usual_app_replaced": false,
+  "notarization": "not_performed",
+  "other_mac_first_login": "not_verified",
+  "physical_sleep_network_soak": "not_verified",
+  "package": {
+    "file": "BeeperLocal-0.8.7-AppleSilicon-beta.zip",
+    "size_bytes": 61656795,
+    "sha256": "51b2b97f4085ac114c69b76f123ebd6b22a635d9e032e637c9825ff17c2b8fa8",
+    "source_files": 756,
+    "source_archive_bytes": 3326182
+  },
+  "package_checks": {
+    "zip_extraction_signature": true,
+    "executables_match_build": true,
+    "extracted_setup_helpers": true,
+    "embedded_source_assets": 23,
+    "unsupported_node_rejected_before_build": true
+  }
+}

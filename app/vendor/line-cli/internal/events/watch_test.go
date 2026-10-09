@@ -323,6 +323,47 @@ func TestWatchPeriodicProbeDetectsQuietForcedLogout(t *testing.T) {
 	}
 }
 
+func TestWatchStatusEventsExposeReadyReconnectAndForcedLogout(t *testing.T) {
+	w, f, s, out := setup(t)
+	w.StatusEvents = true
+	f.probeErrors = []error{nil, errors.New("V3_TOKEN_CLIENT_LOGGED_OUT")}
+	f.streams = []stream{{frames: []frame{{"ping", ""}}, err: io.EOF}}
+	if err := w.Run(context.Background()); err == nil || !s.state.Invalidated || f.refreshes != 0 {
+		t.Fatal("forced logout not terminal", err)
+	}
+	var statuses []map[string]string
+	decoder := json.NewDecoder(out)
+	for decoder.More() {
+		var status map[string]string
+		if err := decoder.Decode(&status); err != nil {
+			t.Fatal(err)
+		}
+		statuses = append(statuses, status)
+	}
+	want := []map[string]string{
+		{"event": "status", "state": "ready"},
+		{"event": "status", "state": "reconnecting"},
+		{"event": "status", "state": "logged_out", "code": "LINE_SESSION_REVOKED"},
+	}
+	if !reflect.DeepEqual(statuses, want) {
+		t.Fatalf("unexpected status frames: %#v", statuses)
+	}
+}
+
+func TestWatchStatusEventsNeverDeclareReadyBeforeServerResponds(t *testing.T) {
+	w, f, _, out := setup(t)
+	w.StatusEvents = true
+	w.ProbeInterval = time.Millisecond
+	f.probeErrors = []error{nil, errors.New("V3_TOKEN_CLIENT_LOGGED_OUT")}
+	f.onListen = func(ctx context.Context, _ func(string, string)) error { <-ctx.Done(); return ctx.Err() }
+	if w.Run(context.Background()) == nil {
+		t.Fatal("expected terminal logout")
+	}
+	if out.String() != "{\"event\":\"status\",\"state\":\"logged_out\",\"code\":\"LINE_SESSION_REVOKED\"}\n" {
+		t.Fatal("quiet stream falsely declared ready", out.String())
+	}
+}
+
 func TestWatchEncryptedFailureDoesNotExposeChunks(t *testing.T) {
 	w, f, _, out := setup(t)
 	f.streams = []stream{{frames: []frame{{"operation", `{"revision":"11","type":26,"message":{"id":"encrypted","from":"u-peer","to":"u-self","toType":0,"text":"fallback-secret","chunks":["secret-chunk"]}}`}}}}
@@ -399,9 +440,6 @@ func TestWatchReportsMediaWithoutExposingEncryptionMetadata(t *testing.T) {
 		}
 		events := outputEvents(t, out)
 		want := "attachment"
-		if kind == 7 {
-			want = "unsupported"
-		}
 		if len(events) != 1 || events[0].Message.Status != want || !events[0].Message.Encrypted || strings.Contains(out.String(), "private") {
 			t.Fatalf("unsafe media event: %s", out)
 		}

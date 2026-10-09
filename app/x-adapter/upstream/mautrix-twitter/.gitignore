@@ -1,0 +1,10 @@
+.DS_Store
+.claude/settings.local.json
+/mautrix-twitter
+logs/
+*.db*
+*.yaml
+!example-config.yaml
+!.pre-commit-config.yaml
+/start
+/pkg/mautrix

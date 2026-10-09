@@ -16,13 +16,14 @@ import sys
 from ..errors import AppError
 from ..models import Conversation, FetchBatch, SendResult, StoredConversation, UnifiedMessage, finish_batch
 
-MAX_FRAME = 1024 * 1024
+MAX_FRAME = 6 * 1024 * 1024
 DECIMAL = re.compile(r"[1-9][0-9]{0,127}\Z")
 WIRE_ERRORS = frozenset({
     "INVALID_INPUT", "BAD_RESPONSE", "ACCOUNT_CHANGED", "CREDENTIALS_MISSING",
     "CREDENTIALS_INVALID", "RATE_LIMITED", "IG_AUTH_ACTION_REQUIRED", "IG_PROTOCOL_ERROR",
     "IG_REQUEST_TIMEOUT", "IG_REQUEST_FAILED", "IG_SESSION_NOT_SAVED", "IG_DIRECT_ONLY",
     "IG_SEND_UNKNOWN", "IG_RESYNC_REQUIRED",
+    "IG_PASSWORD_REJECTED", "IG_CODE_REJECTED", "IG_ACCOUNT_ACTION_REQUIRED", "IG_LOGIN_REJECTED",
 })
 
 
@@ -41,7 +42,15 @@ def conversation(raw):
         raise AppError("BAD_RESPONSE")
     if long_id:
         decimal_id(long_id)
-    return Conversation(ident, title or "Instagram DM", "dm", {"thread_id": ident, "long_id": long_id})
+    kind = raw.get('kind', 'dm')
+    if kind not in {'dm', 'group'}:
+        raise AppError('BAD_RESPONSE')
+    locator = {"thread_id": ident, "long_id": long_id}
+    from ..desktop_profiles import profile_reference
+    picture = raw.get('picture_url', '')
+    if profile_reference('instagram', {'picture_url': picture}):
+        locator['picture_url'] = picture
+    return Conversation(ident, title or "Instagram DM", kind, locator)
 
 
 def timestamp(value):
@@ -71,6 +80,7 @@ def normalize_instagram(raw, account_id, own_fbid, selected):
         timestamp(raw.get("sent_at")), text, selected.title,
         edited_at=timestamp(raw["edited_at"]) if raw.get("edited_at") else None,
         direction=direction,
+        attachments=raw.get('attachments', []), attachment_count=len(raw.get('attachments', [])),
     )
 
 
@@ -97,7 +107,7 @@ class InstagramAdapter:
                       else Path(__file__).resolve().parents[2] / "bin" / "beeperlocal-ig")
         self.binary = str(binary)
 
-    async def events(self, request, *, prompt=None):
+    async def events(self, request, *, prompt=None, authorize=None):
         if not Path(self.binary).is_file():
             raise AppError("IG_ADAPTER_MISSING")
         try:
@@ -118,6 +128,8 @@ class InstagramAdapter:
             await process.stdin.drain()
 
         try:
+            if authorize:
+                authorize()
             await write(request)
             steps = 0
             while True:
@@ -131,24 +143,26 @@ class InstagramAdapter:
                     if not isinstance(event, dict):
                         raise ValueError()
                 except (ValueError, UnicodeError, TimeoutError):
-                    raise AppError("IG_SEND_UNKNOWN" if operation == "send" else "IG_PROTOCOL_ERROR") from None
+                    raise AppError("IG_SEND_UNKNOWN" if operation in {"send", "send_image"} else "IG_PROTOCOL_ERROR") from None
                 kind = event.get("type")
                 if kind == "error":
                     code = event.get("code")
-                    raise AppError(code if code in WIRE_ERRORS else ("IG_SEND_UNKNOWN" if operation == "send" else "IG_REQUEST_FAILED"))
+                    raise AppError(code if code in WIRE_ERRORS else ("IG_SEND_UNKNOWN" if operation in {"send", "send_image"} else "IG_REQUEST_FAILED"))
                 if kind == "auth_step":
                     steps += 1
                     if operation != "login" or prompt is None or steps > 30:
                         raise AppError("IG_AUTH_ACTION_REQUIRED")
                     await write({"input": await prompt(event.get("fields"))})
                     continue
-                if kind not in {"session", "result", "status", "history", "message", "done"}:
-                    raise AppError("IG_SEND_UNKNOWN" if operation == "send" else "IG_PROTOCOL_ERROR")
+                if kind not in {"session", "result", "status", "history", "message", "change", "done"}:
+                    raise AppError("IG_SEND_UNKNOWN" if operation in {"send", "send_image"} else "IG_PROTOCOL_ERROR")
                 yield event
                 if kind == "status" and event.get("code") == "connected":
                     streaming = True
                 if kind == "session":
                     # The consumer must persist to Keychain before resuming this generator.
+                    if authorize:
+                        authorize()
                     await write({"session_saved": True})
                 if kind == "history" and operation == "watch":
                     await write({"history_saved": True})
@@ -156,9 +170,9 @@ class InstagramAdapter:
                     succeeded = True
                     break
             if not succeeded:
-                raise AppError("IG_SEND_UNKNOWN" if operation == "send" else "IG_REQUEST_FAILED")
+                raise AppError("IG_SEND_UNKNOWN" if operation in {"send", "send_image"} else "IG_REQUEST_FAILED")
         except (BrokenPipeError, ConnectionError, OSError):
-            raise AppError("IG_SEND_UNKNOWN" if operation == "send" else "IG_REQUEST_FAILED") from None
+            raise AppError("IG_SEND_UNKNOWN" if operation in {"send", "send_image"} else "IG_REQUEST_FAILED") from None
         finally:
             await stop_process(process)
 
@@ -220,6 +234,8 @@ class InstagramConnector:
         self.catalog_limited = True
         self.last_event_source = ""
         self.connection_status = "disconnected"
+        self.catalog = {}
+        self.session_lock = asyncio.Lock()
 
     def selected_conversation(self):
         rows = self.credentials.get("selections")
@@ -231,31 +247,42 @@ class InstagramConnector:
             selected = Conversation.from_selection(rows[0])
         except (ValueError, KeyError, TypeError):
             raise AppError("CREDENTIALS_CORRUPT") from None
-        if selected.kind != "dm" or selected.locator.get("thread_id") != selected.id:
+        if selected.kind not in {"dm", "group"} or selected.locator.get("thread_id") != selected.id:
             raise AppError("CREDENTIALS_CORRUPT")
         decimal_id(selected.id)
         return selected
 
-    async def _events(self, op, *, on_status=None, **kwargs):
-        current = self.store.load("instagram")
-        if current.get("account_id") != self.account_id:
-            raise AppError("ACCOUNT_CHANGED")
-        self.credentials = current
-        request = {"op": op, "account_id": self.account_id, "session": current.get("session"), **kwargs}
-        async with aclosing(self.adapter.events(request)) as stream:
-            async for event in stream:
-                if event["type"] == "session":
-                    if event.get("own_fbid") != self.own_fbid:
-                        raise AppError("ACCOUNT_CHANGED")
-                    self.credentials = save_session(self.store, event, self.account_id)
-                elif event["type"] == "status":
-                    if event.get("code") not in {"connected", "reconnecting"}:
-                        raise AppError("IG_PROTOCOL_ERROR")
-                    self.connection_status = event["code"]
-                    if on_status:
-                        on_status(self.connection_status)
-                else:
-                    yield event
+    async def _events(self, op, *, on_status=None, authorize=None, **kwargs):
+        await self.session_lock.acquire()
+        locked = True
+        try:
+            current = self.store.load("instagram")
+            if current.get("account_id") != self.account_id:
+                raise AppError("ACCOUNT_CHANGED")
+            self.credentials = current
+            request = {"op": op, "account_id": self.account_id, "session": current.get("session"), **kwargs}
+            if authorize:
+                authorize()  # Recheck after the session lock, before issuing the mutation.
+            async with aclosing(self.adapter.events(request, **({"authorize": authorize} if authorize else {}))) as stream:
+                async for event in stream:
+                    if event["type"] == "session":
+                        if event.get("own_fbid") != self.own_fbid:
+                            raise AppError("ACCOUNT_CHANGED")
+                        self.credentials = save_session(self.store, event, self.account_id)
+                        if locked:
+                            self.session_lock.release()
+                            locked = False
+                    elif event["type"] == "status":
+                        if event.get("code") not in {"connected", "reconnecting"}:
+                            raise AppError("IG_PROTOCOL_ERROR")
+                        self.connection_status = event["code"]
+                        if on_status:
+                            on_status(self.connection_status)
+                    else:
+                        yield event
+        finally:
+            if locked:
+                self.session_lock.release()
 
     async def _request(self, op, **kwargs):
         async with aclosing(self._events(op, **kwargs)) as stream:
@@ -271,17 +298,43 @@ class InstagramConnector:
             raise AppError("ACCOUNT_CHANGED")
 
     async def list_conversations(self, limit=100):
-        if type(limit) is not int or not 1 <= limit <= 500:
+        if type(limit) is not int or not 1 <= limit <= 10000:
             raise AppError("INVALID_INPUT")
-        result = await self._request("conversations", limit=min(limit, 100))
-        raw = result.get("conversations")
-        if not isinstance(raw, list) or len(raw) > min(limit, 100) or type(result.get("limited")) is not bool:
-            raise AppError("BAD_RESPONSE")
-        rows = [conversation(row) for row in raw]
-        if len({row.id for row in rows}) != len(rows):
-            raise AppError("BAD_RESPONSE")
-        self.catalog_limited = result["limited"]
-        return rows
+        rows, seen, cursor = {}, set(), ''
+        while len(rows) < limit:
+            kwargs = {'limit': min(limit - len(rows), 100)}
+            if cursor: kwargs['cursor'] = cursor
+            result = await self._request("conversations", **kwargs)
+            raw = result.get("conversations")
+            if not isinstance(raw, list) or len(raw) > kwargs['limit'] or type(result.get("limited")) is not bool:
+                raise AppError("BAD_RESPONSE")
+            for item in raw:
+                row = conversation(item)
+                rows[row.id] = row
+                self.catalog[row.id] = row
+            self.catalog_limited = result['limited']
+            cursor = result.get('next_cursor', '')
+            if not isinstance(cursor, str) or len(cursor) > 16384 or cursor in seen:
+                raise AppError('PAGINATION_STALLED')
+            if not cursor: break
+            seen.add(cursor)
+            if len(seen) > 1000: raise AppError('SCAN_LIMIT_REACHED')
+        return list(rows.values())[:limit]
+
+    async def fetch_page(self, selected, *, cursor=None):
+        from ..desktop_sync import HistoryPage
+        kwargs = {'thread_id': selected.id, 'limit': 20}
+        if cursor:
+            if set(cursor) != {'after'} or not isinstance(cursor['after'], str) or len(cursor['after']) > 16384:
+                raise AppError('INVALID_INPUT')
+            kwargs['cursor'] = cursor['after']
+        result = await self._request('history', **kwargs)
+        batch = self._history_batch(result, selected, 20)
+        after = result.get('next_cursor', '')
+        if not isinstance(after, str) or len(after) > 16384:
+            raise AppError('BAD_RESPONSE')
+        return HistoryPage(batch.conversations[0], batch.messages, cursor={'after': after} if after else None,
+                           complete=not after and result.get('page_complete', not batch.history_limited) is True)
 
     async def select_conversation(self, selected):
         # Recheck membership and one-to-one type server-side before saving a selection.
@@ -316,10 +369,35 @@ class InstagramConnector:
         return self._history_batch(result, selected, limit)
 
     async def send_text(self, text):
+        return await self._send_conversation(self.selected_conversation(), text)
+
+    async def send_image_to(self, selected, image, *, authorize):
+        from dataclasses import replace
+        if selected.kind not in {'dm', 'group'} or selected.locator.get('thread_id') != decimal_id(selected.id):
+            raise AppError('INVALID_INPUT')
+        result = await self._request('send_image', thread_id=decimal_id(selected.id), image=image.wire(), authorize=authorize)
+        try:
+            message = normalize_instagram(result.get('message'), self.account_id, self.own_fbid, selected)
+            if message.direction != 'outgoing' or result.get('encrypted') is not False:
+                raise AppError('BAD_RESPONSE')
+            return SendResult(replace(message, attachment_count=1), encrypted=False)
+        except AppError:
+            raise AppError('IG_SEND_UNKNOWN') from None
+
+    async def send_to(self, selected, text, *, authorize):
+        if selected.kind not in {"dm", "group"} or selected.locator.get("thread_id") != decimal_id(selected.id):
+            raise AppError("INVALID_INPUT")
+        # Confirm current access without persisting a new GUI selection.
+        result = await self._request("history", thread_id=selected.id, limit=1)
+        verified = conversation(result.get("conversation"))
+        if verified.id != selected.id:
+            raise AppError("BAD_RESPONSE")
+        return await self._send_conversation(verified, text, authorize=authorize)
+
+    async def _send_conversation(self, selected, text, *, authorize=None):
         if not isinstance(text, str) or not text.strip() or len(text.encode()) > 4000:
             raise AppError("INVALID_INPUT")
-        selected = self.selected_conversation()
-        result = await self._request("send", thread_id=selected.id, text=text)
+        result = await self._request("send", thread_id=selected.id, text=text, authorize=authorize)
         try:
             message = normalize_instagram(result.get("message"), self.account_id, self.own_fbid, selected)
             if message.direction != "outgoing" or message.text != text or result.get("encrypted") is not False:
@@ -329,12 +407,14 @@ class InstagramConnector:
         # E2EE is not claimed. Core persistence is separately AES-GCM encrypted.
         return SendResult(message, encrypted=False)
 
-    async def watch(self, *, timeout=300, from_now=False, recovery_limit=100, persist_history=None, on_status=None):
+    async def watch(self, *, timeout=300, from_now=False, recovery_limit=100, persist_history=None, on_status=None, all_conversations=False, on_change=None):
         if type(timeout) is not int or not 0 <= timeout <= 600 or type(recovery_limit) is not int or not 1 <= recovery_limit <= 100:
             raise AppError("INVALID_INPUT")
         selected = self.selected_conversation()
+        self.catalog[selected.id] = selected
+        extra = {"all_conversations": True} if all_conversations else {}
         try:
-            async with aclosing(self._events("watch", thread_id=selected.id, timeout=timeout, from_now=from_now, limit=recovery_limit, on_status=on_status)) as stream:
+            async with aclosing(self._events("watch", **extra, thread_id=selected.id, timeout=timeout, from_now=from_now, limit=recovery_limit, on_status=on_status)) as stream:
                 async for event in stream:
                     if event["type"] == "history":
                         batch = self._history_batch(event, selected, recovery_limit)
@@ -346,7 +426,16 @@ class InstagramConnector:
                                 yield message
                     elif event["type"] == "message" and event.get("source") == "realtime":
                         self.last_event_source = "realtime"
-                        yield normalize_instagram(event.get("message"), self.account_id, self.own_fbid, selected)
+                        target = self.catalog.get(event.get('message', {}).get('thread_id')) if all_conversations else selected
+                        if target is not None:
+                            yield normalize_instagram(event.get("message"), self.account_id, self.own_fbid, target)
+                    elif event['type'] == 'change':
+                        target = self.catalog.get(event.get('thread_id')) if all_conversations else selected
+                        if target and target.id == event.get('thread_id') and on_change:
+                            if (event.get('action') not in {'edit','delete'} or not isinstance(event.get('message_id'), str)
+                                    or not 1 <= len(event['message_id']) <= 4096):
+                                raise AppError('BAD_RESPONSE')
+                            on_change(target, event)
                     elif event["type"] == "done":
                         return
                     else:

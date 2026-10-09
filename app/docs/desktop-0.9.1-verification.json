@@ -1,0 +1,66 @@
+{
+  "version": "0.9.1",
+  "date": "2026-10-03",
+  "tests": {
+    "python": 480,
+    "playwright_fixture": 59,
+    "rust_ipc_and_signed_update": 4,
+    "shell_syntax_files": 6,
+    "offline_demo": true,
+    "production_build": true,
+    "new_mcp_provider_http": [
+      "instagram",
+      "x",
+      "messenger"
+    ],
+    "fixture_http_restart_and_revocation": true,
+    "saved_pagination_and_scopes": true,
+    "send_duplicate_unknown_and_revocation": true
+  },
+  "signature": {
+    "mode": "release",
+    "executables_verified": 8,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "architectures": {
+    "beeperlocal-ig": "arm64",
+    "beeperlocal-messenger": "arm64",
+    "beeperlocal-x": "arm64",
+    "line": "arm64",
+    "beeperlocal-core": "arm64",
+    "beeperlocal-desktop": "arm64",
+    "beeperlocal-x-login": "arm64",
+    "beeperlocal-messenger-login": "arm64"
+  },
+  "isolated_runtime": {
+    "runtime": {
+      "runtimeReady": true,
+      "mcp": true,
+      "xCrypto": true,
+      "version": "0.9.1"
+    },
+    "instagram_setup": {
+      "instagramLoginReady": true
+    },
+    "slack_setup": {
+      "slackLoginReady": true
+    }
+  },
+  "private_pipe_ping_providers": 5,
+  "empty_home": true,
+  "os_path_only": true,
+  "read_credentials": false,
+  "usual_app_version": "0.8.5",
+  "usual_app_replaced": false,
+  "real_messages_sent": 0,
+  "production_mcp_grants_created": 0,
+  "production_data_deleted": false,
+  "mcp_live_ai_client_and_provider_send": "not_verified",
+  "notarization": "not_performed",
+  "other_mac": "not_verified",
+  "new_uiux_inbox_proposals": "documented_not_implemented",
+  "inherited_release_limits": "See INBOX_0_9.md; Slack public OAuth Client ID and updater distribution remain unconfigured",
+  "package_verification": "See desktop-0.9.1-package-verification.json; this build report precedes ZIP creation."
+}

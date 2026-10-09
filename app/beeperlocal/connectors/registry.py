@@ -3,6 +3,7 @@ from importlib import import_module
 from ..errors import AppError
 
 PROVIDERS = {
+    "x": ("XConnector", frozenset({"fetch", "list_conversations", "send_text", "watch"})),
     "instagram": ("InstagramConnector", frozenset({"fetch", "list_conversations", "send_text", "watch"})),
     "matrix": ("MatrixConnector", frozenset({"fetch", "list_conversations"})),
     "slack": ("SlackConnector", frozenset({"fetch", "list_conversations", "fetch_thread", "send_text"})),

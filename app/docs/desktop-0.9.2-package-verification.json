@@ -1,0 +1,55 @@
+{
+  "version": "0.9.2",
+  "date": "2026-10-03",
+  "file": "BeeperLocal-0.9.2-AppleSilicon-beta.zip",
+  "size_bytes": 60174350,
+  "sha256": "445f966d6c9e2f77eb6b55f0cbd0ab12387fc7b7326147029794c1d3d7dc5508",
+  "checks": {
+    "zip_extraction_signature": {
+      "mode": "release",
+      "executables_verified": 8,
+      "embedded_binaries_verified": 85,
+      "update_compatibility": "not_checked",
+      "notarization": "not_checked"
+    },
+    "compatibility": {
+      "passed": true,
+      "minimumOS": "13.0",
+      "executables": 8,
+      "embeddedBinaries": 85
+    },
+    "all_app_files_match_signed_build": 23,
+    "executables_match_signed_build": 8,
+    "embedded_source_assets": 23,
+    "source_matches_current_files": true,
+    "extracted_setup_helpers": 2,
+    "extracted_runtime": {
+      "runtimeReady": true,
+      "mcp": true,
+      "xCrypto": true,
+      "systemTLS": true,
+      "version": "0.9.2"
+    },
+    "extracted_public_tls": {
+      "tlsVerified": true
+    },
+    "portable_path_contains_spaces_and_japanese": true,
+    "isolated_empty_home": true,
+    "os_path_only": true,
+    "developer_ca_unavailable": true,
+    "database_created": false,
+    "keychain_isolation": "not_claimed_no_item_access",
+    "production_ui_fixture_scenarios_absent": true
+  },
+  "source_files": 800,
+  "source_archive_bytes": 3431390,
+  "usual_app_version": "0.8.5",
+  "usual_app_replaced": false,
+  "real_messages_sent": 0,
+  "production_mcp_grants_created": 0,
+  "production_credentials_read": false,
+  "production_data_deleted": false,
+  "notarization": "not_performed",
+  "other_mac_or_os_user": "not_verified",
+  "public_beta_ready": false
+}

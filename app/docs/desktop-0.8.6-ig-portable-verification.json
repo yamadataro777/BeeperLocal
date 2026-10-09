@@ -1,0 +1,35 @@
+{
+  "version": "0.8.6",
+  "date": "2026-10-02",
+  "architecture": "arm64",
+  "coreTests": 398,
+  "uiTests": 32,
+  "shellFilesChecked": 7,
+  "offlineDemo": true,
+  "portableChecks": {
+    "helperReadyWithoutPython": true,
+    "coreRuntimeReady": true,
+    "noninteractiveLoginRefused": true,
+    "zipSignatureValid": true,
+    "helperExecutableAfterUnzip": true,
+    "failureWaitsForEnterInTerminal": true,
+    "noDevelopmentNativeLibraries": true,
+    "noDevelopmentCheckout": true,
+    "allExecutablesArm64": true
+  },
+  "signing": {
+    "mode": "release",
+    "executables_verified": 6,
+    "embedded_binaries_verified": 87,
+    "update_compatibility": "mutual_requirements_verified",
+    "notarization": "not_checked"
+  },
+  "archiveBytes": 50364159,
+  "archiveSHA256": "c960d8ae6fc5aaa5d2052147e5a600b6fad1c9a4c8015a4c50ab14ded09dca17",
+  "nativeExecutablesAndLibrariesAudited": 93,
+  "liveTargetMacLogin": "not_tested",
+  "targetMac": "M1 / macOS 27 (user report)",
+  "providerRequestsDuringVerification": 0,
+  "credentialsAccessedDuringVerification": false,
+  "messagesSentDuringVerification": 0
+}

@@ -6,17 +6,18 @@ from decimal import Decimal, InvalidOperation
 import json
 import re
 import ssl
+from ..tls import client_context
 import time
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler, HTTPSHandler, ProxyHandler
 from ..credentials import CredentialStore
 from ..models import StoredConversation
 from ..errors import AppError
 from ..models import Conversation, FetchBatch, UnifiedMessage, SendResult, finish_batch
 
-ALLOWED_METHODS = frozenset({"auth.test", "conversations.list", "conversations.info", "conversations.history", "conversations.replies"})
+ALLOWED_METHODS = frozenset({"auth.test", "conversations.list", "conversations.info", "conversations.history", "conversations.replies", "users.info"})
 SLACK_ERRORS = {
     "invalid_auth": "CREDENTIALS_INVALID", "token_revoked": "CREDENTIALS_INVALID",
     "token_expired": "CREDENTIALS_INVALID", "not_authed": "CREDENTIALS_INVALID",
@@ -52,7 +53,7 @@ class SlackAPI:
     def __init__(self, token: str, *, max_wait: float = 240, max_requests: int = 100,
                  opener=None, sleep: Callable[[float], None] = time.sleep,
                  notice: Callable[[str], None] | None = None, cooldowns=None):
-        if not isinstance(token, str) or not token.startswith("xoxp-") or any(c.isspace() for c in token):
+        if not isinstance(token, str) or not token.startswith(("xoxp-", "xoxe.xoxp-")) or any(c.isspace() for c in token):
             raise AppError("BOT_TOKEN_NOT_SUPPORTED")
         self._token = token
         self.remaining_wait = max_wait
@@ -61,7 +62,71 @@ class SlackAPI:
         self.notice = notice or (lambda _: None)
         self.cooldowns = cooldowns if cooldowns is not None else {}
         # No ambient HTTP(S)_PROXY forwarding. TLS validation always remains on.
-        self.opener = opener or build_opener(ProxyHandler({}), NoRedirect(), HTTPSHandler(context=ssl.create_default_context()))
+        self.opener = opener or build_opener(ProxyHandler({}), NoRedirect(), HTTPSHandler(context=client_context()))
+
+    def _file_post(self, method, payload):
+        if method not in {'files.getUploadURLExternal', 'files.completeUploadExternal'}:
+            raise AppError('INVALID_INPUT')
+        request = Request('https://slack.com/api/' + method, data=json.dumps(payload).encode(), method='POST',
+            headers={'Authorization': 'Bearer ' + self._token, 'Content-Type': 'application/json; charset=utf-8'})
+        try:
+            with self.opener.open(request, timeout=40) as response:
+                raw = response.read(MAX_RESPONSE_BYTES + 1)
+            if len(raw) > MAX_RESPONSE_BYTES:
+                raise ValueError()
+            data = json.loads(raw)
+            if not isinstance(data, dict):
+                raise ValueError()
+        except HTTPError as exc:
+            exc.close()
+            raise AppError('SLACK_SEND_UNKNOWN') from None
+        except (URLError, OSError, TimeoutError, ValueError, UnicodeError):
+            raise AppError('SLACK_SEND_UNKNOWN') from None
+        if data.get('ok') is not True:
+            code = data.get('error')
+            if code == 'missing_scope':
+                raise AppError('SLACK_IMAGE_SCOPE_REQUIRED')
+            raise AppError(SLACK_ERRORS.get(code, 'SLACK_SEND_UNKNOWN') if isinstance(code, str) else 'SLACK_SEND_UNKNOWN')
+        return data
+
+    def upload_image(self, *, channel, image):
+        created = self._file_post('files.getUploadURLExternal', {'filename': image.name, 'length': len(image.data)})
+        fid, target = created.get('file_id'), created.get('upload_url')
+        if not isinstance(fid, str) or not re.fullmatch(r'F[A-Z0-9]{1,80}', fid) or not slack_file_url(target, upload=True):
+            raise AppError('SLACK_SEND_UNKNOWN')
+        # The one-use upload URL needs no bearer token. Never redirect/replay it.
+        request = Request(target, data=image.data, method='POST', headers={'Content-Type': image.mime})
+        try:
+            with self.opener.open(request, timeout=40) as response:
+                if response.status != 200:
+                    raise ValueError()
+                response.read(65536)
+        except HTTPError as exc:
+            exc.close()
+            raise AppError('SLACK_SEND_UNKNOWN') from None
+        except (URLError, OSError, TimeoutError, ValueError):
+            raise AppError('SLACK_SEND_UNKNOWN') from None
+        completed = self._file_post('files.completeUploadExternal', {'files': [{'id': fid, 'title': image.name}], 'channel_id': channel})
+        files = completed.get('files')
+        if not isinstance(files, list) or len(files) != 1 or not isinstance(files[0], dict) or files[0].get('id') != fid:
+            raise AppError('SLACK_SEND_UNKNOWN')
+        return fid
+
+    def download_image(self, url):
+        if not slack_file_url(url):
+            raise AppError('INVALID_INPUT')
+        request = Request(url, headers={'Authorization': 'Bearer ' + self._token})
+        try:
+            with self.opener.open(request, timeout=25) as response:
+                data = response.read(4 * 1024 * 1024 + 1)
+            if len(data) > 4 * 1024 * 1024:
+                raise AppError('IMAGE_TOO_LARGE')
+            return data
+        except HTTPError as exc:
+            exc.close()
+            raise AppError('NETWORK_ERROR') from None
+        except (URLError, OSError, TimeoutError):
+            raise AppError('NETWORK_ERROR') from None
 
     def post_message(self, *, channel: str, text: str) -> dict[str, Any]:
         # A separate, single-attempt POST path: no GET retry policy or URL body.
@@ -154,6 +219,18 @@ class SlackAPI:
         raise AppError("RATE_LIMITED")
 
 
+def slack_file_url(value, *, upload=False):
+    if not isinstance(value, str) or len(value) > 8192 or any(c.isspace() for c in value) or '\\' in value:
+        return False
+    try:
+        url = urlsplit(value)
+        return (url.scheme == 'https' and url.hostname == 'files.slack.com' and url.port in (None, 443)
+                and not url.username and not url.password and not url.fragment
+                and url.path.startswith('/upload/' if upload else '/files-'))
+    except ValueError:
+        return False
+
+
 def account_identity(auth: dict[str, Any]) -> str:
     if auth.get("bot_id"):
         raise AppError("BOT_TOKEN_NOT_SUPPORTED")
@@ -200,11 +277,19 @@ def normalize_slack(raw: dict[str, Any], account_id: str, self_user: str, conver
     reply = raw.get("thread_ts")
     if reply is not None:
         parse_ts(reply)
+    attachments = []
+    for file in files[:20]:
+        if not isinstance(file, dict):
+            continue
+        fid = file.get('id')
+        url = next((file.get(k) for k in ('thumb_1024', 'thumb_720', 'url_private') if slack_file_url(file.get(k))), None)
+        if isinstance(fid, str) and re.fullmatch(r'F[A-Z0-9]{1,80}', fid) and url and str(file.get('mimetype', '')).startswith('image/'):
+            attachments.append({'kind': 'image', 'url': url, 'file_id': fid})
     return UnifiedMessage(
         provider="slack", account_id=account_id, conversation_id=conversation.id,
         provider_message_id=stamp, sender_id=sender, sent_at=parse_ts(stamp),
         text=text or None, conversation_title=conversation.title, attachment_count=len(files),
-        edited_at=edited_at, reply_to_message_id=reply if reply != stamp else None,
+        edited_at=edited_at, reply_to_message_id=reply if reply != stamp else None, attachments=attachments,
         direction="outgoing" if sender == self_user else ("unknown" if sender == "unknown" else "incoming"),
     )
 
@@ -227,22 +312,28 @@ class SlackConnector:
             raise AppError("CREDENTIALS_CORRUPT")
         self.api = api or SlackAPI(token, max_wait=max_wait, notice=notice)
         self._injected_api = api is not None
+        self._auth_lock = asyncio.Lock()
         self._api_options = {"max_wait": max_wait, "notice": notice, "cooldowns": self.api.cooldowns if isinstance(self.api, SlackAPI) else {}}
         self.identity: str | None = None
         self.self_user: str | None = None
+        self.catalog_limited = True
 
     @property
     def account_id(self):
         return self.credentials["account_id"]
 
-    def _begin_operation(self):
+    async def _begin_operation(self):
         # Budgets are bounded per operation, not exhausted forever by a long-running Core.
-        current = self.store.load("slack")
-        if current.get("account_id") != self.account_id:
-            raise AppError("ACCOUNT_CHANGED")
-        self.credentials = current
-        if not self._injected_api:
-            self.api = SlackAPI(current.get("token"), **self._api_options)
+        async with self._auth_lock:
+            current = self.store.load("slack")
+            if current.get("account_id") != self.account_id:
+                raise AppError("ACCOUNT_CHANGED")
+            if not self._injected_api:
+                from ..slack_oauth import refresh_credentials
+                current = await asyncio.to_thread(refresh_credentials, self.store, current)
+            self.credentials = current
+            if not self._injected_api:
+                self.api = SlackAPI(current.get("token"), **self._api_options)
 
     def selected_conversation(self):
         selections = self.credentials.get("selections", [])
@@ -256,12 +347,16 @@ class SlackConnector:
             raise AppError("CREDENTIALS_CORRUPT") from None
 
     async def select_conversation(self, conversation):
-        self._begin_operation()
+        await self._begin_operation()
         await self.connect()
         await self._check_conversation(conversation)
-        updated = {**self.credentials, "selections": [conversation.selection()]}
-        self.store.save("slack", updated)
-        self.credentials = updated
+        async with self._auth_lock:
+            current = self.store.load("slack")
+            if current.get("account_id") != self.account_id:
+                raise AppError("ACCOUNT_CHANGED")
+            updated = {**current, "selections": [conversation.selection()]}
+            self.store.save("slack", updated)
+            self.credentials = updated
 
     async def _check_conversation(self, conversation):
         cid = conversation.locator.get("channel_id")
@@ -278,10 +373,27 @@ class SlackConnector:
     async def send_text(self, text):
         return await self.send_to(self.selected_conversation(), text)
 
+    async def send_image_to(self, conversation, image, *, authorize):
+        await self._begin_operation()
+        await self.connect()
+        cid = await self._check_conversation(conversation)
+        authorize()
+        fid = await asyncio.to_thread(self.api.upload_image, channel=cid, image=image)
+        # Slack's completion confirms the file share, but returns no message ts.
+        # History later merges this provisional row by the file id within its scope.
+        message = UnifiedMessage('slack', self.identity, cid, 'file:' + fid, self.self_user,
+            datetime.now(timezone.utc), '', conversation.title, direction='outgoing', attachment_count=1,
+            attachments=[{'kind': 'image', 'file_id': fid, 'url': ''}])
+        return SendResult(message, encrypted=False)
+
+    async def download_attachment(self, attachment):
+        await self._begin_operation()
+        return await asyncio.to_thread(self.api.download_image, attachment.get('url'))
+
     async def send_to(self, conversation, text, *, authorize=None):
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise AppError("INVALID_INPUT")
-        self._begin_operation()
+        await self._begin_operation()
         await self.connect()
         cid = await self._check_conversation(conversation)
         if authorize:
@@ -306,14 +418,24 @@ class SlackConnector:
             raise AppError("SLACK_SEND_UNKNOWN") from None
 
     async def connect(self) -> None:
+        await self._begin_operation()
         auth = await asyncio.to_thread(self.api.call, "auth.test")
         self.identity = account_identity(auth)
         self.self_user = auth["user_id"]
         if self.credentials.get("account_id") != self.identity:
             raise AppError("ACCOUNT_CHANGED")
 
+    async def fetch_user_profile(self, user_id):
+        from ..slack_profiles import USER_ID, profile_view
+        if not isinstance(user_id, str) or not USER_ID.fullmatch(user_id):
+            raise AppError("INVALID_INPUT")
+        await self._begin_operation()
+        await self.connect()
+        data = await asyncio.to_thread(self.api.call, "users.info", user=user_id)
+        return profile_view(data, user_id)
+
     async def list_conversations(self, limit: int = 100, types: str = "public_channel,private_channel,im,mpim") -> list[Conversation]:
-        self._begin_operation()
+        await self._begin_operation()
         await self.connect()
         cursor = ""
         seen_cursors: set[str] = set()
@@ -333,16 +455,109 @@ class SlackConnector:
                 cid = channel["id"]
                 title = channel.get("name") or ("DM " + str(channel.get("user", cid)))
                 kind = "dm" if channel.get("is_im") else ("group" if channel.get("is_mpim") or channel.get("is_private") else "channel")
-                results[cid] = Conversation(cid, str(title), kind, {"channel_id": cid})
+                locator = {"channel_id": cid}
+                peer = channel.get("user")
+                if channel.get("is_im") and isinstance(peer, str) and re.fullmatch(r"[UW][A-Z0-9]{1,80}", peer):
+                    locator["peer_user_id"] = peer
+                results[cid] = Conversation(cid, str(title), kind, locator)
                 if len(results) >= limit:
+                    self.catalog_limited = True
                     return list(results.values())
             cursor = cursor_of(data)
             if not cursor:
+                self.catalog_limited = False
                 return list(results.values())
             if cursor in seen_cursors:
                 raise AppError("PAGINATION_STALLED")
             seen_cursors.add(cursor)
         raise AppError("SCAN_LIMIT_REACHED")
+
+    async def fetch_sync_page(self, conversation, *, cursor=None, metadata=None):
+        # Persist the thread inventory with the same cursor/message transaction.
+        # New replies to an old root do not reorder conversations.history.
+        metadata = dict(metadata or {})
+        roots = metadata.get('threads', [])
+        if (not isinstance(roots,list) or len(roots)>10000 or any(not isinstance(v,str) or not TS_PATTERN.fullmatch(v) for v in roots)
+                or type(metadata.get('turn',0)) is not int or type(metadata.get('next',0)) is not int):
+            raise AppError('BAD_RESPONSE')
+        requested = cursor
+        if cursor is None:
+            turn = metadata.get('turn',0)
+            metadata['turn'] = (turn + 1) % 2
+            if turn % 2 and roots:
+                position = metadata.get('next',0) % len(roots)
+                requested = {'thread':roots[position], 'threads':[], 'history':None}
+                metadata['next'] = (position + 1) % len(roots)
+        page = await self.fetch_page(conversation, cursor=requested)
+        found = []
+        for value in (requested, page.cursor):
+            if value and value.get('thread'):
+                found.extend([value['thread'], *value.get('threads',[])])
+        all_roots = list(dict.fromkeys(roots + found))
+        metadata['threads'] = all_roots[:10000]
+        metadata['threadsLimited'] = metadata.get('threadsLimited',False) or len(all_roots)>10000
+        page.poll_metadata = metadata
+        return page
+
+    async def fetch_page(self, conversation, *, cursor=None):
+        from ..desktop_sync import HistoryPage
+        await self._begin_operation()
+        await self.connect()
+        cid = await self._check_conversation(conversation)
+        cursor = cursor or {}
+        if set(cursor) - {'cursor', 'latest', 'thread', 'thread_cursor', 'threads', 'history'}:
+            raise AppError('INVALID_INPUT')
+        thread = cursor.get('thread')
+        if thread:
+            parse_ts(thread)
+            data = await asyncio.to_thread(self.api.call, 'conversations.replies', channel=cid, ts=thread,
+                limit=15, cursor=cursor.get('thread_cursor'))
+        else:
+            data = await asyncio.to_thread(self.api.call, 'conversations.history', channel=cid, limit=15,
+                cursor=cursor.get('cursor'), latest=cursor.get('latest'), inclusive='false')
+        raw = data.get('messages')
+        if not isinstance(raw, list) or len(raw) > 100:
+            raise AppError('BAD_RESPONSE')
+        messages, deleted, threads = [], [], []
+        try:
+            for item in raw:
+                if item.get('subtype') in {'message_deleted', 'tombstone'}:
+                    mid = item.get('deleted_ts') or item.get('ts')
+                    parse_ts(mid)
+                    deleted.append(mid)
+                    continue
+                value = item.get('message') if item.get('subtype') == 'message_changed' else item
+                message = normalize_slack(value, self.identity, self.self_user, conversation)
+                if message:
+                    messages.append(message)
+                    if not thread and type(value.get('reply_count')) is int and value['reply_count'] > 0:
+                        threads.append(value['ts'])
+            token = cursor_of(data)
+            if thread:
+                threads = cursor.get('threads', [])
+                history = cursor.get('history')
+                if token:
+                    next_page = {**cursor, 'thread_cursor': token}
+                elif data.get('has_more'):
+                    raise AppError('PAGINATION_STALLED')
+                elif threads:
+                    next_page = {'thread':threads[0], 'threads':threads[1:], 'history':history}
+                else:
+                    next_page = history
+            else:
+                history = {'cursor': token} if token else None
+                if not token and data.get('has_more'):
+                    stamps = [item['ts'] for item in raw if TS_PATTERN.fullmatch(item.get('ts', ''))]
+                    if not stamps:
+                        raise AppError('PAGINATION_STALLED')
+                    history = {'latest': min(stamps, key=Decimal)}
+                next_page = {'thread':threads[0], 'threads':threads[1:], 'history':history} if threads else history
+            return HistoryPage(StoredConversation('slack', self.account_id, conversation), messages,
+                cursor=next_page, complete=next_page is None and not bool(data.get('is_limited')),
+                followup={**next_page, 'history': None} if next_page and next_page.get('thread') else None,
+                deletions=deleted, coverage='workspace_retention' if data.get('is_limited') else 'channel_and_thread_history')
+        except (TypeError, KeyError, ValueError, AttributeError):
+            raise AppError('BAD_RESPONSE') from None
 
     async def fetch(self, limit: int = 50) -> FetchBatch:
         return await self._fetch(limit)
@@ -356,7 +571,7 @@ class SlackConnector:
         try:
             if type(limit) is not int or not 1 <= limit <= (15 if single_page else 100):
                 raise AppError("INVALID_INPUT")
-            self._begin_operation()
+            await self._begin_operation()
             selections = self.credentials.get("selections", [])
             if not isinstance(selections, list) or not selections:
                 raise AppError("NO_SELECTION")
@@ -452,7 +667,7 @@ class SlackConnector:
             parse_ts(root_ts)
         except ValueError:
             raise AppError("INVALID_INPUT") from None
-        self._begin_operation()
+        await self._begin_operation()
         await self.connect()
         cid = await self._check_conversation(conversation)
         batch = FetchBatch("slack", True, limit, conversations_requested=1)

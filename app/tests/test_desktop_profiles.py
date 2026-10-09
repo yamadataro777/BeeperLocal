@@ -156,7 +156,8 @@ class ProfileTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.core.avatar_fetcher.await_count,1)
         with self.assertRaises(AppError): self.core.avatar(PEER)
         await self.core.pause_storage(True)
-        self.assertIsNone(self.core.avatar(self.record.id)['image'])
+        # Pausing blocks new downloads; previously encrypted profiles remain readable.
+        self.assertEqual(self.core.avatar(self.record.id)['image'], 'data:image/png;base64,fixture')
         self.assertFalse(self.core.avatar(self.record.id)['pending'])
         self.assertEqual(self.core.avatar_fetcher.await_count,1)
 
@@ -215,5 +216,5 @@ class AvatarDownloadTests(unittest.IsolatedAsyncioTestCase):
         cli=object.__new__(LineCLI)
         cli.request=AsyncMock(return_value={'configured':'present','line_validity':'invalidated'})
         with self.assertRaises(AppError) as err: await cli.whoami()
-        self.assertEqual(err.exception.code,'LINE_LOGIN_REQUIRED')
+        self.assertEqual(err.exception.code,'LINE_SESSION_REVOKED')
         self.assertEqual(cli.request.await_count,1)

@@ -42,3 +42,12 @@ line-cli v0.4.0はSQLiteのcommitを待つack契約を持たず、取得も最�
 `tests/test_mcp_controls.py`、`tests/test_mcp_http.py`は架空LINE adapterと一時DBを使用する。HTTPは実127.0.0.1 socketと独立した公式SDK clientを利用し、modern/legacy handshake、4 tools、空resources/prompts、拒否境界を確認する。`desktop/tests/settings.spec.ts`はChrome上の架空データで登録・token一度表示・取り消し・停止・確認付き削除を検証する。
 
 参照: [公式Python SDK](https://github.com/modelcontextprotocol/python-sdk)、[MCP transport仕様](https://modelcontextprotocol.io/specification/latest/basic/transports)。実際の呼び出し契約はビルドに固定したSDKのローカルsourceで照合した。商用client全製品との互換性、OAuth、セキュリティ監査済みを意味しない。
+
+
+## 2026-10-03: 0.9.1のサービス拡張
+
+Instagram・X・Messengerへ同じMCP契約を適用。各Coreのsettings/grantsキーとportを分離し、28644/28645/28646を既定にする（28643はSlack OAuth）。旧設定からはstoragePausedだけを移行し、既存MCP設定・権限は引き継がない。閲覧はローカルDB限定で、get_messagesにscope検証付きbeforeカーソルを追加。送信は既存暗号化outbox・client別UUID名前空間を使用し、GUI選択を変えないexplicit send_toを各connectorへ追加する。
+
+Instagramはセッションロック取得後、adapter生成後、およびsession_saved ACK前に権限を再確認。Xはaccount照合後とworker生成後、Messengerは既存セッションのwrite lock内で再確認する。発行済み送信の回収は保証しない。Messengerの既存deviceを増設・リセットせず、同じ受信プロセスから送る。設定画面は5サービスで共通化し、read/sendを分離、send初期OFF・会話初期未選択を維持。
+
+[実装範囲・検証](MCP_0_9_1.md)。UI/UX調査による統合Inbox案は将来の表示変更であり、MCP許可範囲を自動拡大する根拠にしない。

@@ -12,7 +12,7 @@ test('switches provider, keeps drafts scoped, and sends once to the IG conversat
   await expect(page.getByText('Instagramへの接続を確認しました')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Instagramの友人（架空）' })).toBeVisible();
   await expect(composer).toHaveValue('');
-  await expect(page.locator('.history-scope')).toContainText('直近20件');
+  await expect(page.locator('.history-scope')).toContainText('サービスの保存期間・取得権限の範囲');
   await composer.fill('Instagramだけに送る架空文');
   await page.getByRole('button', { name: '送信', exact: true }).dblclick();
   await expect(page.locator('.bubble').filter({ hasText: 'Instagramだけに送る架空文' })).toHaveCount(1);
@@ -55,7 +55,7 @@ test('reopening remembers only the selected service and never stores the draft',
   await expect(page.getByText('Instagramへの接続を確認しました')).toBeVisible();
   await page.getByRole('textbox', { name: 'メッセージ', exact: true }).fill('保存してはいけない下書き');
   const stored = await page.evaluate(() => JSON.stringify(localStorage));
-  expect(stored).toBe('{"beeperlocal.provider":"instagram"}');
+  expect(JSON.parse(stored)).toMatchObject({ 'beeperlocal.provider': 'instagram', 'beeperlocal.connected.instagram': '1' });
   await page.reload();
   await expect(page.getByText('Instagramへの接続を確認しました')).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'メッセージ', exact: true })).toHaveValue('');
@@ -68,14 +68,14 @@ test('a recovered receiver clears its connection error without leaking it to LIN
     const fixture = await import('/src/fixture.ts');
     fixture.emitStatus('instagram', { receiving: 'reconnecting', retryAttempt: 1, errorCode: 'IG_REQUEST_FAILED' });
   });
-  await expect(page.locator('.activity')).toContainText('Instagramとの接続が停止しました');
+  await expect(page.locator('.activity')).toContainText('Instagramとの通信を完了できませんでした');
   await expect(page.locator('.chat-person')).toContainText('再接続中（1回目）');
   await page.evaluate(async () => {
     const fixture = await import('/src/fixture.ts');
     fixture.emitStatus('instagram', { receiving: 'waiting', retryAttempt: 0, errorCode: null });
   });
-  await expect(page.locator('.activity')).not.toContainText('Instagramとの接続が停止しました');
-  await expect(page.locator('.chat-person')).toContainText('この会話を受信待機中');
+  await expect(page.locator('.activity')).not.toContainText('Instagramとの通信を完了できませんでした');
+  await expect(page.locator('.chat-person')).toContainText('全会話の新着を確認中');
   await page.getByRole('button', { name: 'LINE LINE' }).click();
   await page.evaluate(async () => {
     const fixture = await import('/src/fixture.ts');

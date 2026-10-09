@@ -4,9 +4,14 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"os"
 	"os/signal"
@@ -25,7 +30,7 @@ import (
 	"maunium.net/go/mautrix/bridgev2"
 )
 
-const maxFrame = 1024 * 1024
+const maxFrame = 6 * 1024 * 1024
 
 type safeError string
 
@@ -36,28 +41,60 @@ type session struct {
 	WWWClaim string                            `json:"www_claim"`
 }
 type request struct {
-	Op        string   `json:"op"`
-	Session   *session `json:"session"`
-	AccountID string   `json:"account_id"`
-	ThreadID  string   `json:"thread_id"`
-	Limit     int      `json:"limit"`
-	Text      string   `json:"text"`
-	Timeout   int      `json:"timeout"`
-	FromNow   bool     `json:"from_now"`
+	Op               string      `json:"op"`
+	Session          *session    `json:"session"`
+	AccountID        string      `json:"account_id"`
+	ThreadID         string      `json:"thread_id"`
+	Limit            int         `json:"limit"`
+	Text             string      `json:"text"`
+	Timeout          int         `json:"timeout"`
+	FromNow          bool        `json:"from_now"`
+	AllConversations bool        `json:"all_conversations,omitempty"`
+	Cursor           string      `json:"cursor,omitempty"`
+	Image            *imageInput `json:"image,omitempty"`
 }
+type imageInput struct {
+	Data   string `json:"data"`
+	Mime   string `json:"mime"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+func (img *imageInput) decode() ([]byte, error) {
+	if img == nil || len(img.Data) > 5600000 {
+		return nil, safeError("INVALID_INPUT")
+	}
+	data, err := base64.StdEncoding.Strict().DecodeString(img.Data)
+	if err != nil || len(data) == 0 || len(data) > 4<<20 {
+		return nil, safeError("INVALID_INPUT")
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || (format != "jpeg" && format != "png") || img.Mime != "image/"+format || cfg.Width != img.Width || cfg.Height != img.Height || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width > 16384 || cfg.Height > 16384 || int64(cfg.Width)*int64(cfg.Height) > 25000000 {
+		return nil, safeError("INVALID_INPUT")
+	}
+	return data, nil
+}
+
 type conversation struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	LongID string `json:"long_id"`
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	LongID     string `json:"long_id"`
+	Kind       string `json:"kind,omitempty"`
+	PictureURL string `json:"picture_url,omitempty"`
+}
+type attachment struct {
+	Kind string `json:"kind"`
+	URL  string `json:"url"`
 }
 type message struct {
-	ID        string `json:"id"`
-	ThreadID  string `json:"thread_id"`
-	SenderID  string `json:"sender_id"`
-	SentAt    string `json:"sent_at"`
-	EditedAt  string `json:"edited_at,omitempty"`
-	Text      string `json:"text"`
-	Direction string `json:"direction"`
+	ID          string       `json:"id"`
+	ThreadID    string       `json:"thread_id"`
+	SenderID    string       `json:"sender_id"`
+	SentAt      string       `json:"sent_at"`
+	EditedAt    string       `json:"edited_at,omitempty"`
+	Text        string       `json:"text"`
+	Direction   string       `json:"direction"`
+	Attachments []attachment `json:"attachments,omitempty"`
 }
 type authField struct {
 	ID      string   `json:"id"`
@@ -193,7 +230,7 @@ func decimalID(v string) bool {
 	return true
 }
 func directThread(t *slidetypes.ThreadInfo) (conversation, error) {
-	if t == nil || t.IsGroup || (t.ThreadSubtype != slidetypes.ThreadSubtypeDirect && t.ThreadSubtype != slidetypes.ThreadSubtypeDirectBusiness) {
+	if t == nil || (t.ThreadSubtype != slidetypes.ThreadSubtypeDirect && t.ThreadSubtype != slidetypes.ThreadSubtypeDirectBusiness && t.ThreadSubtype != slidetypes.ThreadSubtypeGroup) || (t.IsGroup && t.ThreadSubtype != slidetypes.ThreadSubtypeGroup) {
 		return conversation{}, safeError("IG_DIRECT_ONLY")
 	}
 	if t.ID != t.ThreadFBID || !decimalID(t.ThreadFBID) || (t.ThreadID != "" && !decimalID(t.ThreadID)) {
@@ -203,7 +240,20 @@ func directThread(t *slidetypes.ThreadInfo) (conversation, error) {
 	if title == "" {
 		title = "Instagram DM"
 	}
-	return conversation{ID: t.ThreadFBID, Title: title, LongID: t.ThreadID}, nil
+	kind := "dm"
+	if t.ThreadSubtype == slidetypes.ThreadSubtypeGroup {
+		kind = "group"
+	}
+	picture := t.ThreadImageURL
+	if picture == "" && kind == "dm" {
+		for _, user := range t.Users {
+			if user != nil && user.ID != t.ViewerID && user.ProfilePicURL != "" {
+				picture = user.ProfilePicURL
+				break
+			}
+		}
+	}
+	return conversation{ID: t.ThreadFBID, Title: title, LongID: t.ThreadID, Kind: kind, PictureURL: picture}, nil
 }
 func normalize(m *slidetypes.Message, threadID, ownFBID string) (*message, error) {
 	if m == nil {
@@ -213,9 +263,47 @@ func normalize(m *slidetypes.Message, threadID, ownFBID string) (*message, error
 	if !m.ExpirationTimestampMS.IsZero() || !m.ViewExpirationTimestampMS.IsZero() {
 		return nil, nil
 	}
-	content, ok := m.Content.Content.(*slidetypes.MessageContentText)
-	if !ok {
+	body := ""
+	attachments := []attachment{}
+	appendAttachments := func(rows []*slidetypes.Attachment, kind string) {
+		for _, a := range rows {
+			if a == nil || a.AttachmentCDNURL == "" {
+				continue
+			}
+			actual := kind
+			if actual == "" {
+				if a.DashManifest != "" || strings.Contains(a.Typename, "Video") {
+					actual = "video"
+				} else {
+					actual = "image"
+				}
+			}
+			attachments = append(attachments, attachment{Kind: actual, URL: a.AttachmentCDNURL})
+		}
+	}
+	switch content := m.Content.Content.(type) {
+	case *slidetypes.MessageContentText:
+		body = content.TextBody
+	case *slidetypes.MessageContentImage:
+		appendAttachments(content.Attachments, "image")
+	case *slidetypes.MessageContentVideo:
+		appendAttachments(content.Videos, "video")
+	case *slidetypes.MessageContentMultiMedia:
+		appendAttachments(content.Attachments, "")
+	case *slidetypes.MessageContentAudio:
+		for _, a := range content.AudioAttachments {
+			if a != nil && a.AttachmentCDNURL != "" {
+				attachments = append(attachments, attachment{Kind: "audio", URL: a.AttachmentCDNURL})
+			}
+		}
+	default:
 		return nil, nil
+	}
+	if body == "" && len(attachments) == 0 {
+		return nil, nil
+	}
+	if len(attachments) > 20 {
+		return nil, safeError("BAD_RESPONSE")
 	}
 	// ID is the canonical GraphQL message identity used by the upstream bridge.
 	if m.ID == "" || (m.ThreadFBID != "" && m.ThreadFBID != threadID) || m.SenderFBID <= 0 || m.TimestampMS.UnixMilli() <= 0 {
@@ -226,7 +314,7 @@ func normalize(m *slidetypes.Message, threadID, ownFBID string) (*message, error
 	if sender == ownFBID {
 		direction = "outgoing"
 	}
-	result := &message{ID: m.ID, ThreadID: threadID, SenderID: sender, SentAt: m.TimestampMS.UTC().Format(time.RFC3339Nano), Text: content.TextBody, Direction: direction}
+	result := &message{ID: m.ID, ThreadID: threadID, SenderID: sender, SentAt: m.TimestampMS.UTC().Format(time.RFC3339Nano), Text: body, Direction: direction, Attachments: attachments}
 	var editedAt time.Time
 	for _, edit := range m.SlideEditHistory {
 		if edit.TimestampMS.After(editedAt) {
@@ -249,7 +337,15 @@ func safeCode(err error) string {
 	switch {
 	case errors.Is(err, httpclient.ErrRateLimited):
 		return "RATE_LIMITED"
-	case errors.Is(err, httpclient.ErrTokenInvalidated), errors.Is(err, instameow.ErrInstagramWebCredentialsRejected), errors.Is(err, instameow.ErrInstagramWebTwoFactorCodeRejected):
+	case errors.Is(err, instameow.ErrInstagramWebCredentialsRejected):
+		return "IG_PASSWORD_REJECTED"
+	case errors.Is(err, instameow.ErrInstagramWebTwoFactorCodeRejected):
+		return "IG_CODE_REJECTED"
+	case errors.Is(err, instameow.ErrInstagramWebAccountPendingDeletion):
+		return "IG_ACCOUNT_ACTION_REQUIRED"
+	case errors.Is(err, instameow.ErrInstagramWebLoginRejected):
+		return "IG_LOGIN_REJECTED"
+	case errors.Is(err, httpclient.ErrTokenInvalidated):
 		return "CREDENTIALS_INVALID"
 	case errors.Is(err, httpclient.ErrChallengeRequired), errors.Is(err, httpclient.ErrCheckpointRequired), errors.Is(err, httpclient.ErrConsentRequired), errors.Is(err, instameow.ErrInstagramWebCheckpointCAPTCHA), errors.Is(err, instameow.ErrInstagramWebCheckpointUnsupported):
 		return "IG_AUTH_ACTION_REQUIRED"
@@ -304,28 +400,36 @@ func readHistory(t *slidetypes.ThreadInfo, ownFBID string, limit int) ([]message
 		messages = append(messages, *m)
 	}
 	page := t.SlideMessages.PageInfo
-	limited := page.HasNextPage || page.HasPreviousPage || len(t.SlideMessages.Edges) > limit || raw >= limit
+	limited := page.HasNextPage || page.HasPreviousPage || len(t.SlideMessages.Edges) > limit
 	return messages, raw, excluded, limited, nil
 }
 func (w *wire) run(ctx context.Context, req request) error {
 	switch req.Op {
-	case "login", "whoami", "conversations", "history", "send", "watch":
+	case "login", "whoami", "conversations", "history", "send", "send_image", "watch":
 	default:
 		return safeError("INVALID_INPUT")
 	}
 	if req.Limit == 0 {
 		req.Limit = 20
 	}
-	if req.Limit < 1 || req.Limit > 100 || req.Timeout < 0 || req.Timeout > 600 {
+	if req.Limit < 1 || req.Limit > 100 || req.Timeout < 0 || req.Timeout > 600 || len(req.Cursor) > 16384 {
 		return safeError("INVALID_INPUT")
 	}
-	if req.Op == "history" || req.Op == "send" || req.Op == "watch" {
+	if req.Op == "history" || req.Op == "send" || req.Op == "send_image" || req.Op == "watch" {
 		if !decimalID(req.ThreadID) {
 			return safeError("INVALID_INPUT")
 		}
 	}
 	if req.Op == "send" && (strings.TrimSpace(req.Text) == "" || len(req.Text) > 4000) {
 		return safeError("INVALID_INPUT")
+	}
+	var photo []byte
+	if req.Op == "send_image" {
+		var err error
+		photo, err = req.Image.decode()
+		if err != nil {
+			return err
+		}
 	}
 	jar := &cookies.Cookies{Platform: types.Instagram}
 	jar.UpdateValues(nil)
@@ -378,9 +482,20 @@ func (w *wire) run(ctx context.Context, req request) error {
 	case "login", "whoami":
 		return w.emit(map[string]any{"type": "result", "account_id": accountID, "own_fbid": ownFBID})
 	case "conversations":
+		threads := mailbox.ThreadsByFolder
+		if req.Cursor != "" {
+			page, err := client.PaginateMailbox(ctx, slidetypes.MakePaginateMailboxRequest(client.GetOwnFBID(), req.Cursor, "INBOX", nil))
+			if err != nil {
+				return err
+			}
+			if page == nil || page.Mailbox == nil {
+				return safeError("BAD_RESPONSE")
+			}
+			threads = page.Mailbox.ThreadsByFolder
+		}
 		rows := []conversation{}
 		seen := map[string]bool{}
-		for _, edge := range mailbox.ThreadsByFolder.Edges {
+		for _, edge := range threads.Edges {
 			conv, e := directThread(edge.Node.AsIGDirectThread)
 			if e == safeError("IG_DIRECT_ONLY") {
 				continue
@@ -393,7 +508,14 @@ func (w *wire) run(ctx context.Context, req request) error {
 				rows = append(rows, conv)
 			}
 		}
-		return w.emit(map[string]any{"type": "result", "conversations": rows, "limited": mailbox.ThreadsByFolder.PageInfo.HasNextPage || len(rows) >= req.Limit})
+		next := ""
+		if threads.PageInfo.HasNextPage {
+			next = threads.PageInfo.EndCursor
+			if next == "" {
+				return safeError("BAD_RESPONSE")
+			}
+		}
+		return w.emit(map[string]any{"type": "result", "conversations": rows, "limited": threads.PageInfo.HasNextPage || len(threads.Edges) > req.Limit, "next_cursor": next})
 	}
 	t, err := fetchThread(ctx, client, req.ThreadID)
 	if err != nil {
@@ -401,7 +523,40 @@ func (w *wire) run(ctx context.Context, req request) error {
 	}
 	conv, _ := directThread(t)
 	switch req.Op {
+	case "send_image":
+		thread, err := strconv.ParseInt(conv.ID, 10, 64)
+		if err != nil {
+			return safeError("INVALID_INPUT")
+		}
+		name := "image.jpg"
+		if req.Image.Mime == "image/png" {
+			name = "image.png"
+		}
+		uploaded, err := client.GetHTTP().SendMercuryUploadRequestOnce(ctx, thread, &httpclient.MercuryUploadMedia{Filename: name, MimeType: req.Image.Mime, MediaData: photo})
+		if err != nil || uploaded == nil || uploaded.Payload.RealMetadata == nil || uploaded.Payload.RealMetadata.GetFbId() <= 0 {
+			return safeError("IG_SEND_UNKNOWN")
+		}
+		resp, err := client.SendMedia(ctx, &slidetypes.SendMediaRequest{AttachmentFBID: strconv.FormatInt(uploaded.Payload.RealMetadata.GetFbId(), 10), ThreadID: conv.ID, OfflineThreadingID: strconv.FormatInt(methods.GenerateEpochID(), 10)})
+		if err != nil || resp == nil {
+			return safeError("IG_SEND_UNKNOWN")
+		}
+		sent := resp.GetMessage()
+		if sent.ID == "" || sent.TimestampMS.UnixMilli() <= 0 {
+			return safeError("IG_SEND_UNKNOWN")
+		}
+		m := message{ID: sent.ID, ThreadID: conv.ID, SenderID: ownFBID, SentAt: sent.TimestampMS.UTC().Format(time.RFC3339Nano), Direction: "outgoing"}
+		return w.emit(map[string]any{"type": "result", "message": m, "conversation": conv, "encrypted": false})
 	case "history":
+		if req.Cursor != "" {
+			page, err := client.PaginateMessages(ctx, &slidetypes.PaginateMessagesRequest{AfterCursor: &req.Cursor, ThreadID: conv.ID, FirstN: 20, InitialMessagePageCount: 20})
+			if err != nil {
+				return err
+			}
+			if page == nil || page.ThreadInfo.AsIGDirectThread == nil || page.ThreadInfo.AsIGDirectThread.ID != conv.ID || page.ThreadInfo.AsIGDirectThread.Messages == nil {
+				return safeError("BAD_RESPONSE")
+			}
+			t.SlideMessages = page.ThreadInfo.AsIGDirectThread.Messages
+		}
 		messages, raw, excluded, limited, err := readHistory(t, ownFBID, req.Limit)
 		if err != nil {
 			return err
@@ -412,7 +567,14 @@ func (w *wire) run(ctx context.Context, req request) error {
 		if err = w.read(&ack); err != nil || !ack.Saved {
 			return safeError("IG_SESSION_NOT_SAVED")
 		}
-		return w.emit(map[string]any{"type": "result", "conversation": conv, "messages": messages, "raw_items": raw, "excluded_events": excluded, "history_limited": limited})
+		next := ""
+		if t.SlideMessages.PageInfo.HasNextPage {
+			next = t.SlideMessages.PageInfo.EndCursor
+			if next == "" {
+				return safeError("BAD_RESPONSE")
+			}
+		}
+		return w.emit(map[string]any{"type": "result", "conversation": conv, "messages": messages, "raw_items": raw, "excluded_events": excluded, "history_limited": limited, "next_cursor": next, "page_complete": !t.SlideMessages.PageInfo.HasNextPage && len(t.SlideMessages.Edges) <= req.Limit})
 	case "send":
 		// GetThread has just verified the selected canonical GraphQL thread ID.
 		// IGThreadIGID uses ThreadFBID/ID (upstream meta.IGID), not the long ThreadID.
@@ -429,6 +591,11 @@ func (w *wire) run(ctx context.Context, req request) error {
 	}
 	return safeError("INVALID_INPUT")
 }
+func watchConversation(t *slidetypes.ThreadInfo) conversation {
+	c, _ := directThread(t)
+	return c
+}
+
 func (w *wire) watch(ctx context.Context, client *instameow.Client, req request, t *slidetypes.ThreadInfo, accountID, ownFBID string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -451,24 +618,37 @@ func (w *wire) watch(ctx context.Context, client *instameow.Client, req request,
 		case *slidetypes.ResnapshotRequired:
 			fatal(safeError("IG_RESYNC_REQUIRED"))
 		case *slidetypes.Delta:
-			event, ok := e.Data.(*slidetypes.NewMessageEvent)
-			if !ok || event.Message == nil {
-				return nil
-			}
 			threadID := e.ThreadIGID
-			if threadID == "" {
-				threadID = event.Message.ThreadFBID
+			if incoming, ok := e.Data.(*slidetypes.NewMessageEvent); ok && threadID == "" && incoming.Message != nil {
+				threadID = incoming.Message.ThreadFBID
 			}
-			if threadID != req.ThreadID {
+			if !req.AllConversations && threadID != req.ThreadID {
 				return nil
 			}
-			m, err := normalize(event.Message, req.ThreadID, ownFBID)
-			if err != nil {
-				fatal(err)
-				return err
+			if !decimalID(threadID) {
+				return nil
 			}
-			if m != nil {
-				return w.emit(map[string]any{"type": "message", "source": "realtime", "message": m})
+			switch event := e.Data.(type) {
+			case *slidetypes.NewMessageEvent:
+				if event.Message == nil {
+					return nil
+				}
+				m, err := normalize(event.Message, threadID, ownFBID)
+				if err != nil {
+					fatal(err)
+					return err
+				}
+				if m != nil {
+					return w.emit(map[string]any{"type": "message", "source": "realtime", "message": m})
+				}
+			case *slidetypes.DeleteMessageEvent:
+				if event.MessageID != "" {
+					return w.emit(map[string]any{"type": "change", "action": "delete", "thread_id": threadID, "message_id": event.MessageID})
+				}
+			case *slidetypes.EditMessageEvent:
+				if event.MessageID != "" {
+					return w.emit(map[string]any{"type": "change", "action": "edit", "thread_id": threadID, "message_id": event.MessageID, "text": event.TextBody, "edited_at": event.SlideEditHistoryEntry.TimestampMS.Time.UTC().Format(time.RFC3339Nano)})
+				}
 			}
 		}
 		return nil
@@ -480,7 +660,7 @@ func (w *wire) watch(ctx context.Context, client *instameow.Client, req request,
 		if err != nil {
 			return err
 		}
-		if err = w.emit(map[string]any{"type": "history", "conversation": conversation{ID: t.ThreadFBID, Title: t.ThreadTitle, LongID: t.ThreadID}, "messages": messages, "raw_items": raw, "excluded_events": excluded, "history_limited": limited}); err != nil {
+		if err = w.emit(map[string]any{"type": "history", "conversation": watchConversation(t), "messages": messages, "raw_items": raw, "excluded_events": excluded, "history_limited": limited}); err != nil {
 			return err
 		}
 		var ack struct {

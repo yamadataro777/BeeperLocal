@@ -1,5 +1,7 @@
 # ローカルMCP要件と実装対応
 
+**現行0.9.1:** LINE・Slack・Instagram・X・Messengerの5サービスに対応。使い方・権限・検証は[MCP_0_9_1.md](MCP_0_9_1.md)。以下は0.6.0時点の記録です。
+
 更新: 2026-09-30 / Desktop 0.6.0。製品定義は「メッセージの預け先を増やさず、自分のAIにつなぐ」。LINE → Instagram → 𝕏の順序を維持する。以下はLINE最小実装の受入結果。詳細契約は[ADR_LOCAL_MCP.md](ADR_LOCAL_MCP.md)。
 
 | 要件 | 実装と根拠 | 検証と限界 |

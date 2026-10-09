@@ -1,0 +1,30 @@
+{
+  "created_utc": "2026-10-01T04:57:25.451611+00:00",
+  "twittermeow_commit": "5282873f8a8941c11e6e0aa66aeb9c0e0d9fab3d",
+  "twittermeow_local_patch": "patches/twittermeow-local.patch",
+  "chat_xdk_commit": "017650c0dec4018e282e878c52a5874abb911b34",
+  "python_requirements": "requirements.txt",
+  "files_sha256": {
+    "X接続.command": "05bbb2a63f50a772261474f38c0204e8874078e40218e9352c23d19e5785c2d5",
+    "requirements.txt": "22f8e405bfaf8be900007e39296621e4c6d6537b40918c9e393f61896ad50698",
+    "bridge/go.mod": "c17a861b81a73d83c1b60eee98fae43c9b444b00db0360dfa9ccef665c98e4ab",
+    "bridge/go.sum": "e70ab4a36d9f38b26206a462c5a09a29fa14d22564cf0b328bbc3dad2ba1fb64",
+    "bin/xbridge": "0cae88d39d18a667ba9596ad9908b34153b192e293893d0da14c33f8e430781e",
+    "patches/twittermeow-local.patch": "7896e71dbd12757a6fbde32af23778445fb41600606dbfe9625e2696702f5421",
+    "xconnector/__init__.py": "dcfbbf47ef19a0abaae91d3e88dca6511470c44d40b75e45384a360af770a7a3",
+    "xconnector/core.py": "88a01ad3106624eb0b9e9fb24ccca6b3783173cd3231d411f5474e16312a8da9",
+    "xconnector/native_keychain.py": "b85cd5aa0a817db8c7abd287b3bd020523be11cc85109b112084cee6723c62e4",
+    "xconnector/__main__.py": "be4f9f829d5e0a24588ea5355c27b5944dd03773fdc0a97a1543fa89c85eb01b",
+    "tests/test_connector.py": "f1467743e5112e4aa0a7d2444d4b7686c2fec794cae369bab92c17b7e34decde",
+    "bridge/bootstrap_probe_test.go": "9cb564bf6b983aed59b1e35a7d289a53464e87ba4f31f11c5035986822e1645e",
+    "bridge/main.go": "e7b145c5716b4bf79662c153b562cb57e839105bc26b0cf44fc9b17641df85a6",
+    "bridge/main_test.go": "d8980642403aef8478958faa119a8be91e9fe608a4e33edc653d8b12a61ed78d",
+    "scripts/build.py": "e99d09fc7040f176ce668dbefecf42ddf5577a58284205e13c0b2ce086bc1669",
+    "native-login/main.swift": "52c6550e97a3f8c185162abe84c0051593b5c206b9c61260bdb372236edfdfca",
+    "xconnector/web_login.py": "13ac115d6ee6aa930f32a0e0d2018f66848cf85eb43a4e3b33e1038e387049e8",
+    "bin/XLogin.app/Contents/MacOS/x-web-login": "c48d97d1a9306605955fa34bba6fed2bb7404c7c9a08903f930d59a8db5c2432",
+    "bin/XLogin.app/Contents/Info.plist": "c209ad4ed5cf66227fd016bdc74ce126dc6f1d3e0c62926a692d1b2f6c01887f",
+    "scripts/diagnose_history.py": "69df3b93f63c0ea39499f298a6cbd8bdd8586f1105ca18ae06fc104340701992"
+  },
+  "updated_utc": "2026-10-01T06:20:26.725465+00:00"
+}
